@@ -1,9 +1,11 @@
+#include "backend.hh"
+
 #include <cstdlib>
 #include <unistd.h>
 #include <type_traits>
 #include <algorithm>
 
-using u32 = unsigned;
+using namespace lang;
 
 void check(bool condition) {
   if (!condition)
@@ -14,22 +16,6 @@ char buf[4096 * 4096];
 
 template <class T>
 constexpr bool is_trivial = std::is_trivial_v<T>;
-
-template <class T>
-struct Span {
-  T const* base;
-  u32 size;
-  T const* begin() const { return base; }
-  T const* end() const { return base + size; }
-  T const& operator[](u32 index) const { return base[index]; }
-  friend u32 len(Span const& x) { return x.size; }
-  explicit operator bool() const { return size; }
-  template <class S>
-  Span<S> reinterpret() const {
-    static_assert(sizeof(S) == sizeof(T));
-    return {reinterpret_cast<S const*>(base), size};
-  }
-};
 
 template <class T>
 struct Mut {
@@ -153,10 +139,6 @@ struct Struct {
 };
 
 
-constexpr Span<char> operator""_s(char const* s, unsigned long n) {
-  return {s, u32(n)};
-}
-
 // assumes 10 bytes free
 u32 to_string(char* out, u32 n) {
   u32 i = 0;
@@ -198,10 +180,17 @@ void test_case(Struct& s, Span<char> data) {
     }
     ::write(1, "\n", 1);
   }
-  
 }
 
 int main() {
+
+  {
+    lang::Backend b;
+    b.mov(rax, 49);
+    b.ret();
+    try_running_it(b.output);
+  }
+
   {
     Struct s;
     s.field("name"_s);
