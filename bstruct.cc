@@ -7,11 +7,6 @@
 
 using namespace lang;
 
-void check(bool condition) {
-  if (!condition)
-    abort();
-}
-
 char buf[4096 * 4096];
 
 template <class T>
@@ -185,7 +180,8 @@ void test_case(Struct& s, Span<char> data) {
 int main() {
 
   {
-    lang::Backend b;
+    Stream out;
+    lang::Backend b {out};
     auto ph1 = b.ph();
     auto ph2 = b.ph();
     b.jmp(rel8(ph2));
@@ -195,7 +191,7 @@ int main() {
     b.mov(rax, 47);
     b.label(ph1);
     b.ret();
-    try_running_it(b.output);
+    try_running_it(out.str());
   }
 
   {

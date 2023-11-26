@@ -25,6 +25,11 @@ using uptr = unsigned long;
 
 static_assert(sizeof(uptr) == sizeof(void*));
 
+constexpr void check(bool condition) {
+  if (!condition)
+    abort();
+}
+
 template <class T>
 struct Span {
   T const* base;
@@ -40,6 +45,8 @@ struct Span {
     return {reinterpret_cast<S const*>(base), size};
   }
 };
+
+using Str = Span<char>;
 
 struct Stream {
   char* data {};
@@ -63,6 +70,7 @@ struct Stream {
   void reserve(u32 amount) {
     grow(size + amount);
   }
+  Str str() const { return {data, size}; }
 };
 
 inline void print(Span<char> x, Stream& s) {

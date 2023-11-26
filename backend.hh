@@ -1,28 +1,26 @@
 #pragma once
 
-#include "bytes.hh"
+#include "common.hh"
 
-#include <string>
 #include <map>
 #include <vector>
 #include <ostream>
-#include <cassert>
 
 namespace lang {
 
 template <class T>
 struct indir {
   T r;
-  int32_t ofs;
+  i32 ofs;
 };
 
-static constexpr size_t n_regs = 16;
+static constexpr uptr n_regs = 16;
 
 struct reg64 {
-  uint8_t id;
-  constexpr reg64(): id(static_cast<uint8_t>(0xff)) {}
-  constexpr explicit reg64(uint8_t id): id(id) {}
-  constexpr indir<reg64> operator[](int32_t ofs) const { return {*this, ofs}; }
+  u8 id;
+  constexpr reg64(): id(static_cast<u8>(0xff)) {}
+  constexpr explicit reg64(u8 id): id(id) {}
+  constexpr indir<reg64> operator[](i32 ofs) const { return {*this, ofs}; }
   constexpr bool operator<(const reg64& b) const { return id < b.id; }
   constexpr bool operator==(const reg64& b) const { return id == b.id; }
   constexpr bool operator!=(const reg64& b) const { return id != b.id; }
@@ -89,8 +87,8 @@ struct lreg8 {
   // bpl = 5,
   // sil = 6,
   // dil = 7,
-  uint8_t id;
-  lreg8(uint8_t id): id(id) {}
+  u8 id;
+  lreg8(u8 id): id(id) {}
 };
 
 enum dreg8 {
@@ -141,31 +139,31 @@ constexpr rel8_linkable_address rel8(placeholder x) { return {x}; }
 constexpr rel32_linkable_address rel32(placeholder x) { return {x}; }
 
 inline lreg8 lowest8(reg64 r) {
-  assert(r.id < 8); // TODO: Need to support for extended ones?
+  check(r.id < 8); // TODO: Need to support for extended ones?
   return lreg8(r.id);
 }
 
 struct Backend {
 
-  Bytes output;
+  Stream& output;
 
-  u32 placeholder_counter;
+  u32 placeholder_counter {};
 
   // Create a new unique placeholder.
   placeholder ph();
 
   // Labels that have been placed in this backend block.
-  std::map<placeholder, offset> labels;
+  std::map<placeholder, offset> labels {};
 
   // Locations in this backend block that refer to specific placeholders.
-  std::map<placeholder, std::vector<offset>> refs8;
-  std::map<placeholder, std::vector<offset>> refs32;
+  std::map<placeholder, std::vector<offset>> refs8 {};
+  std::map<placeholder, std::vector<offset>> refs32 {};
 
   void label(placeholder x);
 
   void setup();
 
-  void literal(const std::string& s);
+  void literal(Str s);
 
   void cqo();
 
@@ -173,9 +171,9 @@ struct Backend {
 
   void push_(reg64 r);
   void push_(reg16 r);
-  void push_(uint8_t n);
-  void push_(uint32_t n);
-  void push_(int32_t n) { return push_(uint32_t(n)); }
+  void push_(u8 n);
+  void push_(u32 n);
+  void push_(i32 n) { return push_(u32(n)); }
 
   void div(reg64 r);
   void idiv(reg64 r);
@@ -191,27 +189,27 @@ struct Backend {
   void jne(rel32_linkable_address);
   void jge(rel8_linkable_address);
 
-  void shl(reg64 r, uint8_t a);
-  void shl(reg16 r, uint8_t a);
-  void shr(reg16 r, uint8_t a);
-  void sar(reg64 r, uint8_t a);
+  void shl(reg64 r, u8 a);
+  void shl(reg16 r, u8 a);
+  void shr(reg16 r, u8 a);
+  void sar(reg64 r, u8 a);
 
-  void add(reg64 r, int32_t n);
+  void add(reg64 r, i32 n);
   void add(reg16 r, uint16_t n);
   void add(reg64 r1, reg64 r2);
   void add(reg64 r1, indir<reg64> r2);
 
   void sub(reg64 r1, reg64 r2);
-  void sub(reg64 r, uint8_t a);
-  void sub(reg16 r, uint8_t a);
+  void sub(reg64 r, u8 a);
+  void sub(reg16 r, u8 a);
 
   void test(reg16 r1, reg16 r2);
   void test(reg32 r1, reg32 r2);
   void test(reg64 r1, reg64 r2);
   void cmp(reg64 r1, reg64 r2);
-  void cmp(reg64 r, uint8_t n);
-  void cmp(reg32 r, uint8_t n);
-  void cmp(reg8 r, uint8_t n);
+  void cmp(reg64 r, u8 n);
+  void cmp(reg32 r, u8 n);
+  void cmp(reg8 r, u8 n);
   void sete(reg8 r);
   void sete(lreg8 r);
   void sete(dreg8 r);
@@ -224,15 +222,15 @@ struct Backend {
   void xchg(reg64 r1, reg64 r2);
 
   void mov(reg64 r1, reg64 r2);
-  void mov(reg64 r, uint32_t n);
-  void mov(reg64 r, int32_t n);
-  void mov(reg64 r, uint64_t n);
-  void mov(reg64 r, int64_t n);
+  void mov(reg64 r, u32 n);
+  void mov(reg64 r, i32 n);
+  void mov(reg64 r, u64 n);
+  void mov(reg64 r, i64 n);
   void mov(reg8 r1, indir<reg64> r2);
   void mov(dreg8 r1, indir<reg64> r2);
   void mov(indir<reg64> r1, reg64 r2);
-  void mov(indir<reg64>, uint32_t);
-  void mov(indir<reg64>, uint8_t);
+  void mov(indir<reg64>, u32);
+  void mov(indir<reg64>, u8);
   void mov(indir<reg64>, reg8);
   void mov(indir<reg64>, dreg8);
   void mov(reg64 r1, indir<reg64> r2);
@@ -240,9 +238,9 @@ struct Backend {
   void mov(reg64 r, rel32_linkable_address a);
 
   // Convenient wrappers to prevent some ambiguity errors.
-  void mov(indir<reg64> r, char n) { mov(r, uint8_t(n)); }
+  void mov(indir<reg64> r, char n) { mov(r, u8(n)); }
 
-  void lea(reg64 r, int32_t ofs);
+  void lea(reg64 r, i32 ofs);
   void lea(reg64 r1, indir<reg64> r2);
 
   void syscall();
@@ -252,7 +250,7 @@ struct Backend {
 
   void ret();
 
-  void xor_(reg64 r, uint8_t n);
+  void xor_(reg64 r, u8 n);
   void xor_(reg64 r1, reg64 r2);
 
   void dump_output();
@@ -260,6 +258,6 @@ struct Backend {
 
 void append(Backend& b1, const Backend& b2);
 
-void try_running_it(Bytes& output);
+void try_running_it(Str output);
 
 }

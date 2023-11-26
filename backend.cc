@@ -1,6 +1,7 @@
 #include "backend.hh"
 
-#include <cassert>
+#include "bytes.hh"
+
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -69,22 +70,26 @@ constexpr auto code(const reg8& r) -> nu8 { return static_cast<u8>(r); }
 constexpr auto code(const dreg8& r) -> nu8 { return static_cast<u8>(r); }
 
 constexpr auto as_i8(i32 x) -> i8 {
-  assert(x < 128 && x >= -128);
+  check(x < 128 && x >= -128);
   return static_cast<i8>(x);
 }
 constexpr auto as_i8(i64 x) -> i8 {
-  assert(x < 128 && x >= -128);
+  check(x < 128 && x >= -128);
   return static_cast<i8>(x);
 }
 constexpr auto as_i8(u64 x) -> i8 {
   return as_i8(static_cast<i64>(x));
 }
 constexpr auto as_i32(i64 x) -> i32 {
-  assert(x >= -2147483648 && x < 2147483648);
+  check(x >= -2147483648 && x < 2147483648);
   return static_cast<i32>(x);
 }
 constexpr auto as_i32(u64 x) -> i32 {
   return as_i32(static_cast<i64>(x));
+}
+
+void put_one(Stream& s, u64 ofs, u8 byte) {
+  s.data[ofs] = static_cast<char>(byte);
 }
 
 // Create an 8-bit relative reference to placholder `ph` at offset `ofs` in
@@ -93,11 +98,19 @@ static void rel8(Backend& b, placeholder ph, offset ofs) {
   auto it = b.labels.find(ph);
   if (it != b.labels.end()) {
     auto rel = static_cast<i64>(it->second - (ofs + 1));
-    assert(rel < 128 && rel > -128);
-    b.output.data[ofs] = static_cast<u8>(rel);
+    check(rel < 128 && rel > -128);
+    put_one(b.output, ofs, static_cast<u8>(rel));
   } else {
     b.refs8[ph].emplace_back(ofs);
   }
+}
+
+u8* data_ptr(Stream& s, u64 ofs) {
+  return reinterpret_cast<u8*>(&s.data[ofs]);
+}
+
+u8 const* data_ptr(Stream const& s, u64 ofs) {
+  return (u8 const*) (&s.data[ofs]);
 }
 
 // Create a 32-bit relative reference to placholder `ph` at offset `ofs` in
@@ -106,7 +119,7 @@ static void rel32(Backend& b, placeholder ph, offset ofs) {
   auto it = b.labels.find(ph);
   if (it != b.labels.end()) {
     auto rel = as_i32(it->second - (ofs + 4));
-    encode(rel, &b.output[ofs]);
+    encode(rel, data_ptr(b.output, ofs));
   } else {
     b.refs32[ph].emplace_back(ofs);
   }
@@ -119,7 +132,7 @@ static void label(Backend& b, placeholder p, offset x) {
   if (it8 != b.refs8.end()) {
     for (auto loc: it8->second) {
       auto ofs = as_i8(x - (loc + 1));
-      b.output[loc] = ofs & 0xff;
+      put_one(b.output, loc, ofs & 0xff);
     }
     b.refs8.erase(it8);
   }
@@ -127,7 +140,7 @@ static void label(Backend& b, placeholder p, offset x) {
   if (it32 != b.refs32.end()) {
     for (auto loc: it32->second) {
       auto ofs = as_i32(x - (loc + 4));
-      encode(ofs, &b.output[loc]);
+      encode(ofs, data_ptr(b.output, loc));
     }
     b.refs32.erase(it32);
   }
@@ -141,12 +154,19 @@ static auto g_prefix(reg64 r1, reg64 r2) -> u8 {
   return 0x48_uc | 0x04_uc * (r1.id >= 8) | (r2.id >= 8);
 }
 
+void write(Stream& v, auto... x) {
+  v.reserve((... + encode_upper_bound(x)));
+  auto it = data_ptr(v, v.size);
+  ((it = encode(x, it)),...);
+  v.size = static_cast<u32>(it - data_ptr(v, 0));
+}
+
 void Backend::sub(reg64 r1, reg64 r2) {
   write(output, g_prefix(r2, r1), 0x29_uc, 0xc0_uc | (code(r2) << 3) | code(r1));
 }
 
 void Backend::sub(reg64 r, uint8_t a) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0x83_uc, 0xe8_uc | code(r), a);
 }
 
@@ -155,12 +175,12 @@ void Backend::sub(reg16 r, uint8_t a) {
 }
 
 void Backend::neg(reg64 r) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0xf7_uc, 0xd8_uc | code(r));
 }
 
 void Backend::shl(reg64 r, uint8_t a) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0xc1_uc, 0xe0_uc | code(r), a);
 }
 
@@ -177,7 +197,7 @@ void Backend::shr(reg16 r, uint8_t a) {
 }
 
 void Backend::sar(reg64 r, uint8_t a) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0xc1_uc, 0xf8_uc | code(r), a);
 }
 
@@ -186,7 +206,7 @@ void Backend::cqo() {
 }
 
 void Backend::push_(reg64 r) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x50_uc | code(r));
 }
 
@@ -203,7 +223,7 @@ void Backend::push_(uint32_t n) {
 }
 
 void Backend::div(reg64 r) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0xf7_uc, 0xf0_uc | code(r));
 }
 
@@ -228,7 +248,7 @@ void Backend::cmp(reg64 r1, reg64 r2) {
 }
 
 void Backend::cmp(reg64 r, uint8_t n) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0x83_uc, 0xf8_uc | code(r), n);
 }
 
@@ -295,7 +315,7 @@ struct IndirBundle {
   indir<reg64> r;
   nu8 regs;
 };
-static auto encode_upper_bound(IndirBundle const&) -> u64 { return 6; }
+static u32 encode_upper_bound(IndirBundle const&) { return 6; }
 static auto encode(IndirBundle const& x, u8* i) {
   if (!is_8bit(x.r.ofs)) {
     i = write(i, x.regs | 0x80_uc);
@@ -379,6 +399,21 @@ void Backend::mov(reg64 r, uint64_t n) {
 
 void Backend::mov(reg64 r, int64_t n) { mov(r, static_cast<uint64_t>(n)); }
 
+void push_from(Stream& v, u8 const* data, u32 size) {
+  v.reserve(size);
+  memcpy(&v.data[v.size], data, size);
+  v.size += size;
+}
+
+void push_from(Stream& v, Stream const& v2) {
+  push_from(v, data_ptr(v2, 0), v2.size);
+}
+
+void push(Stream& v, auto... x) {
+  u8 m[] {x...};
+  push_from(v, m, sizeof...(x));
+}
+
 static auto xchg_rax(Backend& b, reg64 r) {
   push(b.output, 0x48_uc | (r.id >= 8), 0x90_uc | code(r));
 }
@@ -445,25 +480,25 @@ void Backend::mov(indir<reg64> r1, dreg8 r2) {
 }
 
 void Backend::mov(reg32 r1, indir<reg64> r2) {
-  assert(is_8bit(r2.ofs));  // why is this here?
-  assert(r2.r.id < 8);  // why is this here?
+  check(is_8bit(r2.ofs));  // why is this here?
+  check(r2.r.id < 8);  // why is this here?
   write(output, 0x8b_uc, IndirBundle {r2, code(r1) << 3 | code(r2.r)});
 }
 
 void Backend::mov(reg64 r, rel32_linkable_address a) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0x8d_uc, 0x00_uc | (code(r) << 3) | 0b101_uc, u32(0));
   rel32(*this, a.ph, output.size - 4);
 }
 
 // TODO: Turn this into explicit lea from rip.
 void Backend::lea(reg64 r, int32_t ofs) {
-  assert(r.id < 8);  // why is this here?
+  check(r.id < 8);  // why is this here?
   write(output, 0x48_uc | (r.id >= 8), 0x8d_uc, 0x00_uc | (code(r) << 3) | 0b101_uc, ofs);
 }
 
 void Backend::lea(reg64 r1, indir<reg64> r2) {
-  assert(r1.id < 16 && r2.r.id < 16); // why is this here?
+  check(r1.id < 16 && r2.r.id < 16); // why is this here?
   write(output, g_prefix(r1, r2.r), 0x8d_uc, IndirBundle {r2, code(r1) << 3 | code(r2.r)});
 }
 
@@ -483,12 +518,12 @@ void Backend::call(reg64 r) {
 }
 
 void Backend::xor_(reg64 r, uint8_t n) {
-  assert(r.id < 8);
+  check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0x83_uc, 0xf0_uc | code(r), n);
 }
 
 void Backend::xor_(reg64 r1, reg64 r2) {
-  assert(r1.id < 8 && r2.id < 8);
+  check(r1.id < 8 && r2.id < 8);
   write(output, 0x48_uc, 0x31_uc, 0xc0_uc | (code(r2) << 3) | code(r1));
 }
 
@@ -496,8 +531,8 @@ void Backend::ret() {
   write(output, 0xc3_uc);
 }
 
-void Backend::literal(const std::string& s) {
-  push_from(output, reinterpret_cast<u8 const*>(s.data()), s.size());
+void Backend::literal(Str s) {
+  push_from(output, reinterpret_cast<u8 const*>(s.base), s.size);
 }
 
 void Backend::dump_output() {
@@ -535,11 +570,11 @@ void append(Backend& b1, const Backend& b2) {
     label(b1, ph, b1n + ofs);
 }
 
-void try_running_it(Bytes& output) {
+void try_running_it(Str output) {
   // cerr << "DEBUG: asm length " << output.size << endl;
   cerr << "Try running it...\n";
   auto area = (uint8_t *) mmap(0, output.size, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  memcpy(area, output.data, output.size);
+  memcpy(area, output.base, output.size);
   auto fn = (int (*)(void)) area;
   int ans = fn();
   cerr << "Result was " << ans << "\n";
