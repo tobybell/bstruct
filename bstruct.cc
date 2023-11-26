@@ -184,14 +184,28 @@ int main() {
     lang::Backend b {out};
     auto ph1 = b.ph();
     auto ph2 = b.ph();
-    b.jmp(rel8(ph2));
-    b.mov(rax, 49);
+    b.mov(rax, 0);
     b.jmp(rel8(ph1));
     b.label(ph2);
-    b.mov(rax, 47);
+    b.add(rax, indir<reg64> {rsi, 0});
+    b.add(rsi, 4);
+    b.sub(rdi, 1);
     b.label(ph1);
+    b.cmp(rdi, 0);
+    b.jne(rel8(ph2));
     b.ret();
-    try_running_it(out.str());
+    println("Try running it...\n"_s);
+    Executable exec (out.str());
+    auto fn = exec.as<u32, int, int*>();
+
+    int nums[] {1,2,3,4,5};
+
+    auto ans = fn(1, nums);
+    println("Result was "_s, ans, "\n"_s);
+    ans = fn(2, nums);
+    println("Result was "_s, ans, "\n"_s);
+    ans = fn(3, nums);
+    println("Result was "_s, ans, "\n"_s);
   }
 
   {

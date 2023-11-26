@@ -73,6 +73,8 @@ struct Stream {
   Str str() const { return {data, size}; }
 };
 
+void print(u32, Stream&);
+
 inline void print(Span<char> x, Stream& s) {
   s.reserve(x.size);
   memcpy(&s.data[s.size], x.base, x.size);

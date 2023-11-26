@@ -258,6 +258,16 @@ struct Backend {
 
 void append(Backend& b1, const Backend& b2);
 
-void try_running_it(Str output);
+struct Executable {
+  void* data;
+  u32 size;
+  Executable(Str);
+  Executable(Executable const&) = delete;
+  ~Executable();
+  template <class Ret, class... Arg>
+  Ret (*as())(Arg...) {
+    return reinterpret_cast<Ret (*)(Arg...)>(data);
+  }
+};
 
 }

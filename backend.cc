@@ -570,14 +570,14 @@ void append(Backend& b1, const Backend& b2) {
     label(b1, ph, b1n + ofs);
 }
 
-void try_running_it(Str output) {
-  // cerr << "DEBUG: asm length " << output.size << endl;
-  cerr << "Try running it...\n";
-  auto area = (uint8_t *) mmap(0, output.size, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  memcpy(area, output.base, output.size);
-  auto fn = (int (*)(void)) area;
-  int ans = fn();
-  cerr << "Result was " << ans << "\n";
+Executable::Executable(Str output) {
+  data = mmap(0, output.size, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  size = output.size;
+  memcpy(data, output.base, output.size);
+}
+
+Executable::~Executable() {
+  munmap(data, size);
 }
 
 }
