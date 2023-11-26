@@ -113,8 +113,8 @@ enum class syscall_t {
 
 template <class T>
 struct unique_int {
-  int val;
-  constexpr unique_int(int val): val(val) {}
+  u32 val;
+  constexpr unique_int(u32 val): val(val) {}
   constexpr bool operator==(const unique_int& y) const { return val == y.val; }
   constexpr bool operator!=(const unique_int& y) const { return val != y.val; }
   constexpr bool operator<(const unique_int& y) const { return val < y.val; }
@@ -140,9 +140,6 @@ constexpr rel8_linkable_address rel8(placeholder x) { return {x}; }
 
 constexpr rel32_linkable_address rel32(placeholder x) { return {x}; }
 
-/** Create a new unique placeholder. */
-placeholder ph();
-
 inline lreg8 lowest8(reg64 r) {
   assert(r.id < 8); // TODO: Need to support for extended ones?
   return lreg8(r.id);
@@ -151,6 +148,11 @@ inline lreg8 lowest8(reg64 r) {
 struct Backend {
 
   Bytes output;
+
+  u32 placeholder_counter;
+
+  // Create a new unique placeholder.
+  placeholder ph();
 
   // Labels that have been placed in this backend block.
   std::map<placeholder, offset> labels;

@@ -513,10 +513,7 @@ void Backend::dump_output() {
   }
 }
 
-// Global counter for creating unique placeholders.
-static int placholder_counter {1};
-
-placeholder ph() { return {placholder_counter++}; }
+placeholder Backend::ph() { return {placeholder_counter++}; }
 
 void append(Backend& b1, const Backend& b2) {
   auto& b1o = b1.output;

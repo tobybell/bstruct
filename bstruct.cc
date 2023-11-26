@@ -186,7 +186,14 @@ int main() {
 
   {
     lang::Backend b;
+    auto ph1 = b.ph();
+    auto ph2 = b.ph();
+    b.jmp(rel8(ph2));
     b.mov(rax, 49);
+    b.jmp(rel8(ph1));
+    b.label(ph2);
+    b.mov(rax, 47);
+    b.label(ph1);
     b.ret();
     try_running_it(b.output);
   }
