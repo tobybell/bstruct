@@ -357,6 +357,12 @@ void Backend::jmp(rel32_linkable_address a) {
   rel32(*this, a.ph, output.size - 4);
 }
 
+void Backend::jmp(reg64 r) {
+  if (r.id >= 8)
+    write(output, 0x41_uc);
+  write(output, 0xff_uc, 0xe0_uc | code(r));
+}
+
 void Backend::jge(rel8_linkable_address a) {
   write(output, 0x7d_uc, u8(0));
   rel8(*this, a.ph, output.size - 1);

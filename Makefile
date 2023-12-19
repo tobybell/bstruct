@@ -3,7 +3,7 @@ CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Og -g
 %.o: %.cc
 	clang++ -o $@ $(CFLAGS) -MD -c $<
 
-OBJECTS=bstruct.o common.o backend.o
+OBJECTS=bstruct.o common.o backend.o prog1.o
 
 .PHONY: run
 

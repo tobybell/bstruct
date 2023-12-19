@@ -183,6 +183,7 @@ struct Backend {
 
   void jmp(rel8_linkable_address);
   void jmp(rel32_linkable_address);
+  void jmp(reg64);
   void je(rel8_linkable_address);
   void je(rel32_linkable_address);
   void jne(rel8_linkable_address);

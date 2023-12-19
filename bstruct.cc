@@ -1,4 +1,5 @@
 #include "backend.hh"
+#include "stub.hh"
 
 #include <cstdlib>
 #include <unistd.h>
@@ -177,26 +178,34 @@ void test_case(Struct& s, Span<char> data) {
   }
 }
 
+/*
+Generic ABI
+- Pass return address as a continuation:
+
+*/
+
 long my_stub(u64 a, u64 b, u64 c) {
   println("my_stub ", a, ' ', b, ' ', c);
   return 24;
 }
 
-template <class... Args, u32... I>
-void call_stub_helper(Backend& b, u64 stub, Indices<I...>, Args... args) {
-  static constexpr reg64 regs[] {rdi, rsi, rdx, rcx, r8, r9};
-  (b.mov(regs[I], args), ...);
-  b.mov(rax, stub);
-  b.call(rax);
-}
+#define program(name) void name(Backend&);
 
-template <class Ret, class... StubArgs, class... Args>
-void call_stub(Backend& b, Ret (*stub)(StubArgs...), Args... args) {
-  static_assert(sizeof...(StubArgs) == sizeof...(Args));
-  call_stub_helper(b, reinterpret_cast<u64>(stub), make_indices<sizeof...(args)> {}, args...);
+program(prog1);
+
+void try_program(void (*prog)(Backend&)) {
+  Stream out;
+  lang::Backend b {out};
+  prog(b);
+  Executable exec (out.str());
+  auto fn = exec.as<void>();
+  println("Try running it..."_s);
+  fn();
 }
 
 int main() {
+
+  try_program(prog1);
 
   {
     Stream out;
