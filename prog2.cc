@@ -64,29 +64,65 @@ void print_stub(u64 const* words) {
   write(1, s.data, s.size);
 }
 
+thread_local u32 track_rsp {};
+
 void push_imm64(Backend& b, u64 imm) {
   b.mov(rax, imm);
   b.push(rax);
+  track_rsp += 8;
+}
+
+void string(Backend& b, reg64 r, Str str) {
+  check(len(str) <= 8);
+  u64 bytes;
+  memcpy(&bytes, str.base, len(str));
+  push_imm64(b, bytes);
+  push_imm64(b, (u64(len(str)) << 8) | 1);
+  b.mov(r, rsp);
+}
+
+void integer(Backend& b, reg64 r, u64 value) {
+  push_imm64(b, value << 8);
+  b.mov(r, rsp);
 }
 
 void prog2(Backend& b) {
-  // integer
-  push_imm64(b, 13423ull << 8);
-  b.mov(rdi, rsp);
+  track_rsp = 0;
 
-  // string
-  push_imm64(b, 0x6f6c6c6568);
-  push_imm64(b, (5ull << 8) | 1);
-  b.mov(rsi, rsp);
+  integer(b, rdi, 13423);
+  string(b, rsi, "hello"_s);
 
   // list
   b.push(rdi);
   b.push(rsi);
+  track_rsp += 16;
   push_imm64(b, (2ull << 8) | 2);
   b.mov(rdi, rsp);
 
   b.mov(rax, u64(print_stub));
   b.call(rax);
-  b.add(rsp, 48);
+
+  // object
+  string(b, rsi, "name"_s);
+  string(b, rcx, "age"_s);
+  b.push(rcx);
+  b.push(rsi);
+  track_rsp += 16;
+  push_imm64(b, (2ull << 8) | 2);
+  b.mov(rsi, rsp);
+
+  string(b, rdi, "Toby"_s);
+  integer(b, rcx, 26);
+  b.push(rcx);
+  b.push(rdi);
+  b.push(rsi);
+  b.push(3);
+  track_rsp += 32;
+  b.mov(rdi, rsp);
+
+  b.mov(rax, u64(print_stub));
+  b.call(rax);
+
+  b.add(rsp, i32(track_rsp));
   b.ret();
 }
