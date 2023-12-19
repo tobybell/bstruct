@@ -51,7 +51,8 @@ void print_value(u64 const* object) {
   // string (u8 1, u56 length, u8 chars[length])
   // list (u8 2, u56 length, u64 ptrs[length])
   // object (u64 3, u64 keys_ptr, u64 value_ptrs[length])
-  void (*printers[4])(u64 const*) {print_integer, print_string, print_list, print_object};
+  void (*printers[4])(u64 const*) {
+      print_integer, print_string, print_list, print_object};
   u8 type = u8(object[0]);
   check(type < 4);
   printers[type](object);
@@ -72,56 +73,76 @@ void push_imm64(Backend& b, u64 imm) {
   track_rsp += 8;
 }
 
-void string(Backend& b, reg64 r, Str str) {
+struct StackValue {
+  u32 rsp_offset;
+};
+
+StackValue string(Backend& b, Str str) {
   check(len(str) <= 8);
   u64 bytes;
   memcpy(&bytes, str.base, len(str));
   push_imm64(b, bytes);
   push_imm64(b, (u64(len(str)) << 8) | 1);
-  b.mov(r, rsp);
+  return {track_rsp};
 }
 
-void integer(Backend& b, reg64 r, u64 value) {
+StackValue integer(Backend& b, u64 value) {
   push_imm64(b, value << 8);
-  b.mov(r, rsp);
+  return {track_rsp};
+}
+
+void load(Backend& b, reg64 r, StackValue v) {
+  b.lea(r, indir<reg64> {rsp, i32(track_rsp - v.rsp_offset)});
+}
+
+void push(Backend& b, StackValue v) {
+  load(b, rax, v);
+  b.push(rax);
+  track_rsp += 8;
+}
+
+StackValue list(Backend& b, std::initializer_list<StackValue> items) {
+  for (u32 i = u32(items.size()); i--;)
+    push(b, items.begin()[i]);
+  push_imm64(b, (u64(items.size()) << 8) | 2);
+  return {track_rsp};
+}
+
+StackValue
+object(Backend& b, StackValue keys, std::initializer_list<StackValue> values) {
+  for (u32 i = u32(values.size()); i--;)
+    push(b, values.begin()[i]);
+  push(b, keys);
+  b.push(3);
+  track_rsp += 8;
+  return {track_rsp};
+}
+
+void print(Backend& b, StackValue v) {
+  load(b, rdi, v);
+  b.mov(rax, u64(print_stub));
+  b.call(rax);
 }
 
 void prog2(Backend& b) {
   track_rsp = 0;
 
-  integer(b, rdi, 13423);
-  string(b, rsi, "hello"_s);
+  auto v1 = integer(b, 13423);
+  auto v2 = string(b, "hello"_s);
 
-  // list
-  b.push(rdi);
-  b.push(rsi);
-  track_rsp += 16;
-  push_imm64(b, (2ull << 8) | 2);
-  b.mov(rdi, rsp);
+  auto v3 = list(b, {v1, v2});
 
-  b.mov(rax, u64(print_stub));
-  b.call(rax);
+  print(b, v3);
 
-  // object
-  string(b, rsi, "name"_s);
-  string(b, rcx, "age"_s);
-  b.push(rcx);
-  b.push(rsi);
-  track_rsp += 16;
-  push_imm64(b, (2ull << 8) | 2);
-  b.mov(rsi, rsp);
+  auto name = string(b, "name"_s);
+  auto age = string(b, "age"_s);
+  auto keys = list(b, {name, age});
 
-  string(b, rdi, "Toby"_s);
-  integer(b, rcx, 26);
-  b.push(rcx);
-  b.push(rdi);
-  b.push(rsi);
-  b.push(3);
-  track_rsp += 32;
-  b.mov(rdi, rsp);
+  auto toby = string(b, "Toby"_s);
+  auto ts = integer(b, 26);
+  auto obj = object(b, keys, {toby, ts});
 
-  b.mov(rax, u64(print_stub));
-  b.call(rax);
+  print(b, obj);
 
   b.add(rsp, i32(track_rsp));
   b.ret();
