@@ -1,4 +1,4 @@
-CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Og -g
+CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Og -g -fno-exceptions
 
 %.o: %.cc
 	clang++ -o $@ $(CFLAGS) -MD -c $<
@@ -12,5 +12,8 @@ run: bstruct
 
 bstruct: $(OBJECTS)
 	clang++ -o $@ $(CFLAGS) $^
+
+clean:
+	rm *.o *.d bstruct
 
 -include $(OBJECTS:.o=.d)

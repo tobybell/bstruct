@@ -143,4 +143,33 @@ struct MakeIndices<0u> {
 template <u32 Size>
 using make_indices = typename MakeIndices<Size>::type;
 
+template <class T>
+using remove_reference = std::remove_reference_t<T>;
+
+template <class T>
+constexpr bool is_lvalue_reference = std::is_lvalue_reference_v<T>;
+
+template <class T>
+remove_reference<T>&& move(T&& x) {
+  return static_cast<remove_reference<T>&&>(x);
+}
+
+template <class T>
+T&& forward(remove_reference<T>& x) {
+  return static_cast<T&&>(x);
+}
+
+template <class T>
+T&& forward(remove_reference<T>&& x) {
+  static_assert(!is_lvalue_reference<T>);
+  return static_cast<T&&>(x);
+}
+
+template <class Dst, class Src>
+Dst exchange(Dst& dst, Src&& new_value) {
+  Dst old_value = move(dst);
+  dst = forward<Src>(new_value);
+  return old_value;
+}
+
 }
