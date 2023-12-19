@@ -192,6 +192,7 @@ long my_stub(u64 a, u64 b, u64 c) {
 #define program(name) void name(Backend&);
 
 program(prog1);
+program(prog2);
 
 void try_program(void (*prog)(Backend&)) {
   Stream out;
@@ -206,6 +207,7 @@ void try_program(void (*prog)(Backend&)) {
 int main() {
 
   try_program(prog1);
+  try_program(prog2);
 
   {
     Stream out;

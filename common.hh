@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <cstring>
+#include <utility>
 
 namespace lang {
 
@@ -85,10 +86,14 @@ inline void print(Span<char> x, Stream& s) {
 }
 
 template <class... T>
+void sprint(Stream& s, T&&... args) {
+  (print(std::forward<T>(args), s), ...);
+}
+
+template <class... T>
 void println(T&&... args) {
   Stream s;
-  (print(args, s), ...);
-  print('\n', s);
+  sprint(s, std::forward<T>(args)..., '\n');
   write(1, s.data, s.size);
 }
 
