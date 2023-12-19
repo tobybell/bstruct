@@ -205,20 +205,20 @@ void Backend::cqo() {
   write(output, 0x48_uc, 0x99_uc);
 }
 
-void Backend::push_(reg64 r) {
+void Backend::push(reg64 r) {
   check(r.id < 8);
   write(output, 0x50_uc | code(r));
 }
 
-void Backend::push_(reg16 r) {
+void Backend::push(reg16 r) {
   write(output, 0x66_uc, 0x50_uc | code(r));
 }
 
-void Backend::push_(uint8_t n) {
+void Backend::push(uint8_t n) {
   write(output, 0x6A_uc, n);
 }
 
-void Backend::push_(uint32_t n) {
+void Backend::push(uint32_t n) {
   write(output, 0x68_uc, n);
 }
 
@@ -399,27 +399,22 @@ void Backend::mov(reg64 r, uint64_t n) {
 
 void Backend::mov(reg64 r, int64_t n) { mov(r, static_cast<uint64_t>(n)); }
 
-void push_from(Stream& v, u8 const* data, u32 size) {
+void write_from(Stream& v, u8 const* data, u32 size) {
   v.reserve(size);
   memcpy(&v.data[v.size], data, size);
   v.size += size;
 }
 
-void push_from(Stream& v, Stream const& v2) {
-  push_from(v, data_ptr(v2, 0), v2.size);
-}
-
-void push(Stream& v, auto... x) {
-  u8 m[] {x...};
-  push_from(v, m, sizeof...(x));
+void write_from(Stream& v, Stream const& v2) {
+  write_from(v, data_ptr(v2, 0), v2.size);
 }
 
 static auto xchg_rax(Backend& b, reg64 r) {
-  push(b.output, 0x48_uc | (r.id >= 8), 0x90_uc | code(r));
+  write(b.output, 0x48_uc | (r.id >= 8), 0x90_uc | code(r));
 }
 
 // static auto noop(Backend& b) {
-//   push(b.output, 0x90_uc);
+//   write(b.output, 0x90_uc);
 // }
 
 void Backend::xchg(reg64 r1, reg64 r2) {
@@ -532,7 +527,7 @@ void Backend::ret() {
 }
 
 void Backend::literal(Str s) {
-  push_from(output, reinterpret_cast<u8 const*>(s.base), s.size);
+  write_from(output, reinterpret_cast<u8 const*>(s.base), s.size);
 }
 
 void Backend::dump_output() {
@@ -555,7 +550,7 @@ void append(Backend& b1, const Backend& b2) {
   auto& b2o = b2.output;
   auto b1n = b1o.size;
 
-  push_from(b1o, b2o);
+  write_from(b1o, b2o);
 
   // Inherit all references from b2.
   for (auto& [ph, locs]: b2.refs8)

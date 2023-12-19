@@ -169,11 +169,11 @@ struct Backend {
 
   void neg(reg64 r);
 
-  void push_(reg64 r);
-  void push_(reg16 r);
-  void push_(u8 n);
-  void push_(u32 n);
-  void push_(i32 n) { return push_(u32(n)); }
+  void push(reg64 r);
+  void push(reg16 r);
+  void push(u8 n);
+  void push(u32 n);
+  void push(i32 n) { return push(u32(n)); }
 
   void div(reg64 r);
   void idiv(reg64 r);

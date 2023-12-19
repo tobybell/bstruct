@@ -177,11 +177,44 @@ void test_case(Struct& s, Span<char> data) {
   }
 }
 
+long my_stub(u64 a, u64 b, u64 c) {
+  println("my_stub ", a, ' ', b, ' ', c);
+  return 24;
+}
+
+template <class... Args, u32... I>
+void call_stub_helper(Backend& b, u64 stub, Indices<I...>, Args... args) {
+  static constexpr reg64 regs[] {rdi, rsi, rdx, rcx, r8, r9};
+  (b.mov(regs[I], args), ...);
+  b.mov(rax, stub);
+  b.call(rax);
+}
+
+template <class Ret, class... StubArgs, class... Args>
+void call_stub(Backend& b, Ret (*stub)(StubArgs...), Args... args) {
+  static_assert(sizeof...(StubArgs) == sizeof...(Args));
+  call_stub_helper(b, reinterpret_cast<u64>(stub), make_indices<sizeof...(args)> {}, args...);
+}
+
 int main() {
 
   {
     Stream out;
     lang::Backend b {out};
+    b.sub(rsp, 8);
+    call_stub(b, my_stub, 5, 6, 7);
+    b.add(rsp, 8);
+    b.ret();
+    println("Try running it..."_s);
+    Executable exec (out.str());
+    auto fn = exec.as<void>();
+    fn();
+  }
+
+  {
+    Stream out;
+    lang::Backend b {out};
+    b.sub(rsp, 8);
     auto ph1 = b.ph();
     auto ph2 = b.ph();
     b.mov(rax, 0);
@@ -193,19 +226,23 @@ int main() {
     b.label(ph1);
     b.cmp(rdi, 0);
     b.jne(rel8(ph2));
+    b.push(rax);
+    call_stub(b, my_stub, 5, 6, 7);
+    b.pop(rax);
+    b.add(rsp, 8);
     b.ret();
-    println("Try running it...\n"_s);
+    println("Try running it..."_s);
     Executable exec (out.str());
     auto fn = exec.as<u32, int, int*>();
 
     int nums[] {1,2,3,4,5};
 
     auto ans = fn(1, nums);
-    println("Result was "_s, ans, "\n"_s);
+    println("Result was "_s, ans);
     ans = fn(2, nums);
-    println("Result was "_s, ans, "\n"_s);
+    println("Result was "_s, ans);
     ans = fn(3, nums);
-    println("Result was "_s, ans, "\n"_s);
+    println("Result was "_s, ans);
   }
 
   {

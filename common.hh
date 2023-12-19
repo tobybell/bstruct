@@ -65,7 +65,7 @@ struct Stream {
     else
       while (capacity < needed)
         capacity *= 2;
-    data = reinterpret_cast<char*>(realloc(data, needed));
+    data = reinterpret_cast<char*>(realloc(data, capacity));
   }
   void reserve(u32 amount) {
     grow(size + amount);
@@ -74,6 +74,9 @@ struct Stream {
 };
 
 void print(u32, Stream&);
+void print(u64, Stream&);
+void print(char, Stream&);
+void print(char const*, Stream&);
 
 inline void print(Span<char> x, Stream& s) {
   s.reserve(x.size);
@@ -85,6 +88,7 @@ template <class... T>
 void println(T&&... args) {
   Stream s;
   (print(args, s), ...);
+  print('\n', s);
   write(1, s.data, s.size);
 }
 
@@ -108,5 +112,30 @@ struct Range {
 };
 
 constexpr Range range(u32 stop) { return {stop}; }
+
+template <u32... Values>
+struct Indices {};
+
+template <u32 First, u32... Values>
+struct IndicesBuilder:
+  IndicesBuilder<First - 1, First, Values...> {};
+
+template <u32... Values>
+struct IndicesBuilder<0u, Values...> {
+  using type = Indices<0u, Values...>;
+};
+
+template <u32 Size>
+struct MakeIndices {
+  using type = typename IndicesBuilder<Size - 1>::type;
+};
+
+template <>
+struct MakeIndices<0u> {
+  using type = Indices<>;
+};
+
+template <u32 Size>
+using make_indices = typename MakeIndices<Size>::type;
 
 }

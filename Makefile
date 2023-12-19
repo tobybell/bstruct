@@ -1,4 +1,4 @@
-CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Ofast
+CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Og -g
 
 %.o: %.cc
 	clang++ -o $@ $(CFLAGS) -MD -c $<
