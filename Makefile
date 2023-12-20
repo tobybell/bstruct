@@ -1,19 +1,20 @@
 CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Og -g -fno-exceptions
 
-%.o: %.cc
-	clang++ -o $@ $(CFLAGS) -MD -c $<
-
-OBJECTS=bstruct.o common.o backend.o prog1.o prog2.o
+MODULES=bstruct common backend prog1 prog2
+OBJECTS=$(MODULES:%=build/%.o)
 
 .PHONY: run
 
-run: bstruct
-	./bstruct
+run: build/bstruct
+	$<
 
-bstruct: $(OBJECTS)
+build/bstruct: $(OBJECTS)
 	clang++ -o $@ $(CFLAGS) $^
 
+build/%.o: %.cc
+	clang++ -o $@ $(CFLAGS) -MD -c $<
+
 clean:
-	rm *.o *.d bstruct
+	rm build/*
 
 -include $(OBJECTS:.o=.d)

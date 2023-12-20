@@ -108,6 +108,10 @@ void load(reg64 r, StackValue v) {
   ctx->b.lea(r, indir<reg64> {rsp, i32(ctx->track_rsp - v.rsp_offset)});
 }
 
+void load_val(reg64 r, StackValue v) {
+  ctx->b.mov(r, indir<reg64> {rsp, i32(ctx->track_rsp - v.rsp_offset)});
+}
+
 void push(StackValue v) {
   load(rax, v);
   ctx->b.push(rax);
@@ -140,25 +144,51 @@ void print(StackValue v) {
 }
 
 void prog2(Backend& b) {
-  FrameContext ctx {b};
+  auto my_routine = b.ph();
+  auto my_repeat = b.ph();
+  auto my_finish = b.ph();
 
-  auto v1 = integer(13423);
-  auto v2 = string("hello"_s);
+  b.mov(rax, rel32(my_repeat));
+  b.push(rax);
+  b.mov(rdi, rsp);
+  b.jmp(rel32(my_routine));
 
-  auto v3 = list({v1, v2});
+  b.label(my_routine);
+  {
+    FrameContext ctx {b};
 
-  print(v3);
+    b.push(rdi);  // next
+    ctx.track_rsp += 8;
+    auto next = StackValue{ctx.track_rsp};
 
-  auto name = string("name"_s);
-  auto age = string("age"_s);
-  auto keys = list({name, age});
+    auto v1 = integer(13423);
+    auto v2 = string("hello"_s);
+    auto v3 = list({v1, v2});
+    print(v3);
 
-  auto toby = string("Toby"_s);
-  auto ts = integer(26);
-  auto obj = object(keys, {toby, ts});
+    auto name = string("name"_s);
+    auto age = string("age"_s);
+    auto keys = list({name, age});
+    auto obj1 = object(keys, {string("Toby"_s), integer(26)});
+    auto obj2 = object(keys, {string("Kasey"_s), integer(24)});
 
-  print(obj);
+    print(obj1);
+    print(obj2);
 
-  b.add(rsp, i32(ctx.track_rsp));
+    load_val(rdi, next);
+    b.mov(rax, indir<reg64>{rdi});
+    b.add(rsp, i32(ctx.track_rsp));
+    b.jmp(rax);
+  }
+
+  b.label(my_repeat);
+  b.add(rsp, 8);
+  b.mov(rax, rel32(my_finish));
+  b.push(rax);
+  b.mov(rdi, rsp);
+  b.jmp(rel32(my_routine));
+
+  b.label(my_finish);
+  b.add(rsp, 8);
   b.ret();
 }
