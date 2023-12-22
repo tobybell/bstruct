@@ -11,7 +11,7 @@ namespace lang {
 template <class T>
 struct indir {
   T r;
-  i32 ofs;
+  i32 ofs {};
 };
 
 static constexpr uptr n_regs = 16;

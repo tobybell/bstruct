@@ -67,6 +67,10 @@ void print_stub(u64 const* words) {
   write(1, s.data, s.size);
 }
 
+void* alloc_stub() {
+  return malloc(8);
+}
+
 thread_local struct FrameContext* ctx {};
 
 struct FrameContext {
@@ -141,6 +145,55 @@ void print(StackValue v) {
   ctx->b.call(rax);
 }
 
+// Continuation ABI: [continuation pointer, arg pointer]
+void return_from_function(StackValue return_value) {
+  auto& b = ctx->b;
+  load_val(rdi, return_value);
+  b.add(rsp, i32(ctx->track_rsp) + 16);  // 16 for arg, data
+  b.mov(rax, indir<reg64>{rsp});  // read next ptr
+  b.push(rdi);  // push return val
+  b.mov(rax, indir<reg64>{rax});  // read next code ptr
+  b.jmp(rax);
+}
+
+void call_stateless_function(placeholder fn, StackValue next) {
+  auto& b = ctx->b;
+  load_val(rax, next);
+  b.add(rsp, i32(ctx->track_rsp));
+  b.push(rax);  // next
+  b.push(0);  // data
+  b.push(0);  // arg
+  b.jmp(rel32(fn));
+}
+
+StackValue pure_continuation(placeholder addr) {
+  auto& b = ctx->b;
+  b.mov(rax, u64(alloc_stub));
+  b.call(rax);
+  b.mov(rdi, rel32(addr));
+  b.mov(indir<reg64>{rax}, rdi);
+  b.push(rax);
+  ctx->track_rsp += 8;
+  return {ctx->track_rsp};
+}
+
+struct ReceiveContinuation {
+  StackValue data;
+  StackValue arg;
+};
+
+ReceiveContinuation receive_continuation() {
+  // have [data, arg] on stack
+  ctx->track_rsp = 16;
+  return {{8}, {16}};
+}
+
+void return_trampoline() {
+  auto& b = ctx->b;
+  b.add(rsp, i32(ctx->track_rsp));
+  b.ret();
+}
+
 }
 
 void prog2(Backend& b) {
@@ -148,18 +201,14 @@ void prog2(Backend& b) {
   auto my_repeat = b.ph();
   auto my_finish = b.ph();
 
-  b.mov(rax, rel32(my_repeat));
-  b.push(rax);
-  b.mov(rdi, rsp);
-  b.jmp(rel32(my_routine));
+  { // entry
+    FrameContext c {b};
+    auto cont = pure_continuation(my_repeat);
+    call_stateless_function(my_routine, cont);
+  }
 
-  b.label(my_routine);
-  {
+  { b.label(my_routine);
     FrameContext ctx {b};
-
-    b.push(rdi);  // next
-    ctx.track_rsp += 8;
-    auto next = StackValue{ctx.track_rsp};
 
     auto v1 = integer(13423);
     auto v2 = string("hello"_s);
@@ -175,20 +224,23 @@ void prog2(Backend& b) {
     print(obj1);
     print(obj2);
 
-    load_val(rdi, next);
-    b.mov(rax, indir<reg64>{rdi});
-    b.add(rsp, i32(ctx.track_rsp));
-    b.jmp(rax);
+    return_from_function(obj1);
   }
 
-  b.label(my_repeat);
-  b.add(rsp, 8);
-  b.mov(rax, rel32(my_finish));
-  b.push(rax);
-  b.mov(rdi, rsp);
-  b.jmp(rel32(my_routine));
+  { b.label(my_repeat);
+    FrameContext c {b};
+    auto [data, arg] = receive_continuation();
 
-  b.label(my_finish);
-  b.add(rsp, 8);
-  b.ret();
+    load_val(rax, data);
+    b.mov(rdi, rel32(my_finish));
+    b.mov(indir<reg64>{rax}, rdi);
+
+    call_stateless_function(my_routine, data);
+  }
+
+  { b.label(my_finish);
+    FrameContext c {b};
+    receive_continuation();
+    return_trampoline(); 
+  }
 }
