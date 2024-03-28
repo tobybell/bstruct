@@ -26,11 +26,6 @@ void print(u64 x, Stream& s) {
   s.size = u32(it - s.data);
 }
 
-void print(char x, Stream& s) {
-  s.reserve(1);
-  s.data[s.size++] = x;
-}
-
 void print(char const* x, Stream& s) {
   for (; *x; ++x)
     print(*x, s);

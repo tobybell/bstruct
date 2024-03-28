@@ -74,9 +74,13 @@ struct Stream {
   Str str() const { return {data, size}; }
 };
 
+inline void print(char c, Stream& s) {
+  s.reserve(1);
+  s.data[s.size++] = c;
+}
+
 void print(u32, Stream&);
 void print(u64, Stream&);
-void print(char, Stream&);
 void print(char const*, Stream&);
 
 inline void print(Span<char> x, Stream& s) {
