@@ -29,6 +29,7 @@ struct Array {
   T& operator[](u32 index) { return data[index]; }
   T const& operator[](u32 index) const { return data[index]; }
   friend u32 len(Array const& array) { return array.size; }
+  T const* begin() const { return data; }
   Span<T> span() const { return {data, size}; }
 };
 
@@ -40,6 +41,8 @@ struct List {
   T& operator[](u32 index) { return array[index]; }
   T const& operator[](u32 index) const { return array[index]; }
   friend u32 len(List const& array) { return array.size; }
+  T const* begin() const { return array.begin(); }
+  operator Span<T>() const { return {begin(), size}; }
   void push(T const& item) {
     if (size == array.size)
       array.resize(size ? size * 2 : 4);
@@ -76,6 +79,14 @@ struct Mut {
 };
 
 template <class T>
+struct ArraySpan {
+  T const* base;
+  Span<u32> ofs;
+  friend u32 len(ArraySpan const& x) { return len(x.ofs) - 1; }
+  Span<T> operator[](u32 i) const { return {base + ofs[i], ofs[i + 1] - ofs[i]}; }
+};
+
+template <class T>
 struct ArrayList {
   List<T> list;
   List<u32> ofs;
@@ -109,6 +120,8 @@ struct ArrayList {
   Span<T> operator[](u32 index) const {
     return {&list[ofs[index]], ofs[index + 1] - ofs[index]};
   }
+  ArraySpan<T> span() const { return {list.begin(), ofs}; }
+  operator ArraySpan<T>() const { return span(); }
 };
 
 }
