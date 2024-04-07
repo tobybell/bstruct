@@ -118,6 +118,7 @@ struct Range {
   Range end() const { return {size}; }
   u32 operator*() const { return size; }
   void operator++() { ++size; }
+  bool operator!=(Range const& rhs) const { return size != rhs.size; }
 };
 
 constexpr Range range(u32 stop) { return {stop}; }

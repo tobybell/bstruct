@@ -41,7 +41,9 @@ struct List {
   T& operator[](u32 index) { return array[index]; }
   T const& operator[](u32 index) const { return array[index]; }
   friend u32 len(List const& array) { return array.size; }
+  friend T& last(List& x) { return x[len(x) - 1]; }
   T const* begin() const { return array.begin(); }
+  T const* end() const { return begin() + size; }
   operator Span<T>() const { return {begin(), size}; }
   void push(T const& item) {
     if (size == array.size)
@@ -84,6 +86,17 @@ struct ArraySpan {
   Span<u32> ofs;
   friend u32 len(ArraySpan const& x) { return len(x.ofs) - 1; }
   Span<T> operator[](u32 i) const { return {base + ofs[i], ofs[i + 1] - ofs[i]}; }
+
+  struct Iterator {
+    T const* base;
+    u32 const* ofs;
+    Span<T> operator*() const { return {base + *ofs, ofs[1] - *ofs}; };
+    void operator++() { ++ofs; }
+    bool operator!=(Iterator const& rhs) const { return ofs != rhs.ofs; }
+  };
+
+  Iterator begin() const { return {base, ofs.begin()}; }
+  Iterator end() const { return {base, ofs.end() - 1}; }
 };
 
 template <class T>
@@ -101,6 +114,11 @@ struct ArrayList {
     list.size += size;
     ofs.push(list.size);
     return {&list[orig_size], size};
+  }
+
+  void last_push(T const& item) {
+    list.push(item);
+    ++last(ofs);
   }
 
   void push(Span<T> items) {

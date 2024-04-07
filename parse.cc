@@ -78,22 +78,27 @@ struct ArrayArrayList {
   }
 
   friend u32 len(ArrayArrayList const& list) { return list.ofs.size - 1; }
+  ArraySpan<T> operator[](u32 i) const {
+    auto end = ofs[i + 1];
+    auto begin = ofs[i];
+    return {list.list.begin(), {list.ofs.begin() + begin, ++end - begin}};
+  }
   friend ArraySpan<T> last(ArrayArrayList<T> const& list) {
-    auto& ofs = list.ofs;
-    auto end = ofs[len(ofs) - 1];
-    auto begin = ofs[len(ofs) - 2];
-    return {list.list.list.begin(), list.list.ofs.begin() + begin, end - begin};
+    return list[len(list) - 1];
   }
 };
 
+using StrList = ArrayList<char>;
 using StrArrayList = ArrayArrayList<char>;
 
 struct Parser {
   List<u32> indent {};
   enum { Struct, Union } cur_decl {};
 
-  ArrayList<char> types;
-  StrArrayList struct_members;
+  StrList types;
+  List<u32> struct_type;
+  StrArrayList struct_member_name;
+  ArrayList<u32> struct_member_type;
 
   Parser() {
     indent.push(0);
@@ -169,11 +174,12 @@ struct Parser {
         check(*it != '\n' && *it != '\0');
       } while (*it != ']');
       type_index_name = str_between(begin, it++);
-      type_index = find(last(struct_members), type_index_name);
+      type_index = find(last(struct_member_name), type_index_name);
       spaces(it);
     }
     check(*it == '\n');
-    struct_members.last_push(name);
+    struct_member_name.last_push(name);
+    struct_member_type.last_push(*type);
     if (type_index) {
       println(":member "_s, name, ' ', type_name, '(', *type, ")["_s, type_index_name, '(', *type_index, ")] "_s, array_size);
     } else {
@@ -198,7 +204,6 @@ struct Parser {
 
   void struct_(char const* it) {
     cur_decl = Struct;
-    struct_members.push_empty();
     while (*it == ' ')
       ++it;
     auto name_begin = it;
@@ -208,7 +213,11 @@ struct Parser {
     println(":struct "_s, cur_struct);
     if (find_type(cur_struct))
       return fail("redefinition of "_s, cur_struct);
+    u32 type = len(types);
     types.push(cur_struct);
+    struct_type.push(type);
+    struct_member_name.push_empty();
+    struct_member_type.push_empty(0);
     while (*it == ' ')
       ++it;
     check(*it == '\n');
@@ -298,6 +307,19 @@ struct Type {
 void test_roundtrip(Str s) {
   Parser p {};
   p.start_line(s.begin());
+  println("------"_s);
+  for (auto struct_: range(len(p.struct_type))) {
+    auto type = p.struct_type[struct_];
+    auto member_name = p.struct_member_name[struct_];
+    auto member_type = p.struct_member_type[struct_];
+    println("struct "_s, p.types[type], " {"_s);
+    for (auto member: range(len(member_name))) {
+      auto name = member_name[member];
+      auto type = member_type[member];
+      println("  "_s, p.types[type], ' ', name, ';');
+    }
+    println("};\n"_s);
+  }
 }
 
 }
