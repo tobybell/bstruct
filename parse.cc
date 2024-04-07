@@ -2,12 +2,22 @@
 #include "array.hh"
 
 #define tail [[clang::musttail]] return
+#define unreachable abort()
 
 using std::forward;
 
 namespace lang {
 
 namespace {
+
+u32 parse_u32(Str s) {
+  u32 ans {};
+  for (char c: s) {
+    check(u32(c - '0') < 10);
+    ans = ans * 10 + u32(c - '0');
+  }
+  return ans;
+}
 
 constexpr struct None {} none;
 
@@ -43,6 +53,16 @@ MaybeU32 find(ArraySpan<T> const& list, Span<T> item) {
   for (u32 i {}; i < n; ++i) {
     auto opt = list[i];
     if (len(opt) == len(item) && !memcmp(item.begin(), opt.begin(), sizeof(T) * len(opt)))
+      return i;
+  }
+  return none;
+}
+
+template <class T>
+MaybeU32 find(Span<T> const& list, T const& item) {
+  u32 n = len(list);
+  for (u32 i {}; i < n; ++i) {
+    if (list[i] == item)
       return i;
   }
   return none;
@@ -91,14 +111,28 @@ struct ArrayArrayList {
 using StrList = ArrayList<char>;
 using StrArrayList = ArrayArrayList<char>;
 
+enum ArrayType {
+  NoArray,
+  FixedArray,
+  MemberArray
+};
+
+struct Member {
+  u32 type;
+  ArrayType array;
+  u32 length;
+};
+
 struct Parser {
   List<u32> indent {};
-  enum { Struct, Union } cur_decl {};
+  enum { Struct, Log } cur_decl {};
 
   StrList types;
   List<u32> struct_type;
   StrArrayList struct_member_name;
-  ArrayList<u32> struct_member_type;
+  ArrayList<Member> struct_member;
+  List<u32> log_type;
+  ArrayList<u32> log_member_struct;
 
   Parser() {
     indent.push(0);
@@ -164,37 +198,32 @@ struct Parser {
     auto type = find_type(type_name);
     check(!!type);
     spaces(it);
-    Str type_index_name {};
-    MaybeU32 type_index {};
-    if (*it == '[') {
-      auto begin = ++it;
-      check(*it != ']');
-      do {
-        ++it;
-        check(*it != '\n' && *it != '\0');
-      } while (*it != ']');
-      type_index_name = str_between(begin, it++);
-      type_index = find(last(struct_member_name), type_index_name);
-      spaces(it);
-    }
     check(*it == '\n');
-    struct_member_name.last_push(name);
-    struct_member_type.last_push(*type);
-    if (type_index) {
-      println(":member "_s, name, ' ', type_name, '(', *type, ")["_s, type_index_name, '(', *type_index, ")] "_s, array_size);
-    } else {
-      println(":member "_s, name, ' ', type_name, '(', *type, ") "_s, array_size);
+    Member member {};
+    member.type = *type;
+    if (array_size) {
+      auto length_member = find(last(struct_member_name), array_size);
+      if (length_member) {
+        member.array = MemberArray;
+        member.length = *length_member;
+      } else {
+        member.array = FixedArray;
+        member.length = parse_u32(array_size);
+      }
     }
+    struct_member_name.last_push(name);
+    struct_member.last_push(member);
     tail start_line(it + 1);
   }
 
-  void union_member(char const* it) {
+  void log_member(char const* it) {
     auto type_name = word(it);
     auto type = find_type(type_name);
     check(!!type);
     spaces(it);
     check(*it == '\n');
-    println(":variant "_s, type_name, '(', *type, ") "_s);
+    auto struct_ = find(struct_type.span(), *type);
+    log_member_struct.last_push(*struct_);
     tail start_line(it + 1);
   }
 
@@ -210,32 +239,33 @@ struct Parser {
     while (is_alphanum(*it))
       ++it;
     auto cur_struct = str_between(name_begin, it);
-    println(":struct "_s, cur_struct);
     if (find_type(cur_struct))
       return fail("redefinition of "_s, cur_struct);
     u32 type = len(types);
     types.push(cur_struct);
     struct_type.push(type);
     struct_member_name.push_empty();
-    struct_member_type.push_empty(0);
+    struct_member.push_empty(0);
     while (*it == ' ')
       ++it;
     check(*it == '\n');
     tail start_line(it + 1);
   }
 
-  void union_(char const* it) {
-    cur_decl = Union;
+  void log(char const* it) {
+    cur_decl = Log;
     while (*it == ' ')
       ++it;
     auto name_begin = it;
     while (is_alphanum(*it))
       ++it;
     auto name = str_between(name_begin, it);
-    println(":union "_s, name);
     if (find_type(name))
       return fail("redefinition of "_s, name);
+    auto type = len(types);
     types.push(name);
+    log_type.push(type);
+    log_member_struct.push_empty(0);
     while (*it == ' ')
       ++it;
     check(*it == '\n');
@@ -246,8 +276,8 @@ struct Parser {
     auto token = word(it);
     if (token == "struct"_s)
       tail struct_(it);
-    if (token == "union"_s)
-      tail union_(it);
+    if (token == "log"_s)
+      tail log(it);
     return fail("unrecognized declaration '"_s, token, '\'');
   }
 
@@ -263,20 +293,18 @@ struct Parser {
       return;
 
     if (n > last(indent)) {
-      println(":pushScope"_s);
       switch (cur_decl) {
         case Struct:
           next = &Parser::member;
           break;
-        case Union:
-          next = &Parser::union_member;
+        case Log:
+          next = &Parser::log_member;
           break;
       }
       indent.push(n);
     } else {
       while (n < last(indent)) {
         indent.pop();
-        println(":popScope"_s);
         next = &Parser::decl;  // pop scope
       }
       check(n == last(indent));
@@ -307,25 +335,43 @@ struct Type {
 void test_roundtrip(Str s) {
   Parser p {};
   p.start_line(s.begin());
-  println("------"_s);
   for (auto struct_: range(len(p.struct_type))) {
     auto type = p.struct_type[struct_];
     auto member_name = p.struct_member_name[struct_];
-    auto member_type = p.struct_member_type[struct_];
+    auto member_info = p.struct_member[struct_];
     println("struct "_s, p.types[type], " {"_s);
-    for (auto member: range(len(member_name))) {
+    for (auto member: range(len(member_info))) {
       auto name = member_name[member];
-      auto type = member_type[member];
-      println("  "_s, p.types[type], ' ', name, ';');
+      auto info = member_info[member];
+      if (info.array == NoArray)
+        println("  "_s, p.types[info.type], ' ', name, ';');
+      else if (info.array == FixedArray)
+        println("  "_s, p.types[info.type], ' ', name, '[', info.length, "];"_s);
+      else if (info.array == MemberArray) {
+        println("  "_s, p.types[info.type], " const* "_s, name, ';');
+      } else
+        unreachable;
     }
     println("};\n"_s);
+  }
+
+  auto n_log = len(p.log_type);
+  for (auto log: range(n_log)) {
+    auto type = p.log_type[log];
+    auto member_struct = p.log_member_struct[log];
+    Stream s;
+    sprint(s, "struct "_s, p.types[type], ": Log<"_s);
+    sprint(s, p.types[p.struct_type[member_struct[0]]]);
+    for (auto member: range(1, len(member_struct)))
+      sprint(s, ", "_s, p.types[p.struct_type[member_struct[member]]]);
+    sprint(s, "> {};"_s);
+    println(s.str(), '\n');
   }
 }
 
 }
 
 void parse() {
-  println("parse "_s);
   test_roundtrip(R"(
 struct DroppedGpsMessage
   count u16
@@ -344,16 +390,12 @@ struct RanDod
   amb_sd[amb_count] i8
   amb_prn[amb_count] u8
 
-union LogType
+log LogType
   DroppedGpsMessage
   BadIslLength
   BadIslTime
   RanDod
-
-struct Log
-  type u32
-  message LogType[type]
-  )"_s);
+)"_s);
 }
 
 }

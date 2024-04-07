@@ -44,7 +44,8 @@ struct List {
   friend T& last(List& x) { return x[len(x) - 1]; }
   T const* begin() const { return array.begin(); }
   T const* end() const { return begin() + size; }
-  operator Span<T>() const { return {begin(), size}; }
+  Span<T> span() const { return {begin(), size}; }
+  operator Span<T>() const { return span(); }
   void push(T const& item) {
     if (size == array.size)
       array.resize(size ? size * 2 : 4);

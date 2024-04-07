@@ -113,15 +113,20 @@ static T todo(Span<char> m) {
 }
 
 struct Range {
+  struct Iterator {
+    u32 value;
+    u32 operator*() const { return value; }
+    void operator++() { ++value; }
+    bool operator!=(Iterator const& rhs) const { return value != rhs.value; }
+  };
+  u32 start;
   u32 size;
-  Range begin() const { return {0}; }
-  Range end() const { return {size}; }
-  u32 operator*() const { return size; }
-  void operator++() { ++size; }
-  bool operator!=(Range const& rhs) const { return size != rhs.size; }
+  Iterator begin() const { return {start}; }
+  Iterator end() const { return {start + size}; }
 };
 
-constexpr Range range(u32 stop) { return {stop}; }
+constexpr Range range(u32 stop) { return {0, stop}; }
+constexpr Range range(u32 start, u32 stop) { return {start, stop - start}; }
 
 template <u32... Values>
 struct Indices {};
