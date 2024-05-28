@@ -605,6 +605,20 @@ constexpr void copy(T* dst, Span<T> src) {
 }
 
 template <class T>
+struct ArrayArray {
+  Array<T> items;
+  Array<u32> offsets;
+
+  friend u32 len(ArrayArray const& array) { return len(array.offsets) - 1; }
+  Mut<T> operator[](u32 index) {
+    return {&items[offsets[index]], offsets[index + 1] - offsets[index]};
+  }
+  Span<T> operator[](u32 index) const {
+    return {&items[offsets[index]], offsets[index + 1] - offsets[index]};
+  }
+};
+
+template <class T>
 struct ArrayList {
   List<T> list;
   List<u32> ofs;
@@ -644,6 +658,10 @@ struct ArrayList {
   friend Span<T> last(ArrayList const& list) {
     check(!!list);
     return list[len(list) - 1];
+  }
+
+  ArrayArray<T> take() {
+    return {list.take(), ofs.take()};
   }
 };
 
@@ -761,20 +779,6 @@ Maybe<u32> find_reverse(Span<T> span, T const& val) {
   }
   return {};
 }
-
-template <class T>
-struct ArrayArray {
-  Array<T> items;
-  Array<u32> offsets;
-
-  friend u32 len(ArrayArray const& array) { return len(array.offsets) - 1; }
-  Mut<T> operator[](u32 index) {
-    return {&items[offsets[index]], offsets[index + 1] - offsets[index]};
-  }
-  Span<T> operator[](u32 index) const {
-    return {&items[offsets[index]], offsets[index + 1] - offsets[index]};
-  }
-};
 
 template <class T>
 struct Own {

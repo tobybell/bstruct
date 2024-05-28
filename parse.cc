@@ -1,6 +1,7 @@
 #include "common.hh"
 #include "print.hh"
 #include "array.hh"
+#include "stream.hh"
 
 #define tail [[clang::musttail]] return
 #define unreachable abort()
@@ -128,6 +129,10 @@ struct Member {
   u32 length;
 };
 
+enum BasicType: u8 {
+  U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BasicTypeCount
+};
+
 struct Parser {
   List<u32> indent {};
   enum { Struct, Log } cur_decl {};
@@ -150,6 +155,7 @@ struct Parser {
     types.push("i32"_s);
     types.push("i64"_s);
     types.push("f32"_s);
+    types.push("f64"_s);
   }
 
   template <class... T>
@@ -319,24 +325,6 @@ struct Parser {
   }
 };
 
-struct TypeWriter {
-  char* it;
-  void name(Str x) {
-    check(len(x) < 256);
-    *it++ = char(u8(len(x)));
-    memcpy(it, x.begin(), len(x));
-    it += len(x);
-  }
-};
-
-struct Type {
-  char const* it;
-  Str name() {
-    u32 size = u32(*it++);
-    return {exchange(it, it + size), size};
-  }
-};
-
 void test_roundtrip(Str s) {
   Parser p {};
   p.start_line(s.begin());
@@ -374,6 +362,124 @@ void test_roundtrip(Str s) {
   }
 }
 
+struct LibraryMember {
+  u32 name;
+  BasicType type;
+};
+
+struct LibraryStruct {
+  u32 name;
+  u32 memberCount;
+  LibraryMember const* member;
+};
+
+void write_member(Stream& s, LibraryMember m, u8 arg) {
+  check(m.type == U8);
+  memcpy(s.reserve(1), &arg, 1);
+  s.grow(1);
+}
+
+template <class... T>
+String make_struct(LibraryStruct s, T&&... args) {
+  Stream out;
+  auto m = s.member;
+  (write_member(out, *m++, forward<T>(args)),...);
+  return out.bytes.take();
+};
+
+struct Library {
+  ArrayArray<char> names;
+  Array<u32> struct_names;
+  ArrayArray<LibraryMember> struct_member;
+
+  LibraryStruct type(Str name) const {
+    auto index = find_if(struct_names.span(), [&](u32 n) {
+      return names[n] == name;
+    });
+    return type(*index);
+  }
+
+  LibraryStruct type(u32 index) const {
+    auto members = struct_member[index];
+    return {struct_names[index], len(members), members.begin()};
+  }
+};
+
+char const* print_member(Print& p, Library const& l, LibraryMember s, char const* it) {
+  sprint(p, ' ', l.names[s.name], '=', u8(*it++));
+  return it;
+}
+
+void print_struct(Print& p, Library const& l, LibraryStruct s, Str b) {
+  auto it = b.begin();
+  sprint(p, l.names[s.name]);
+  for (u32 i: range(s.memberCount)) {
+    it = print_member(p, l, s.member[i], it);
+  }
+}
+
+u32 find_or_add(ArrayList<char>& strs, Str str) {
+  auto exist = find(span(strs), str);
+  if (exist)
+    return *exist;
+  auto id = len(strs);
+  strs.push(str);
+  return id;
+}
+
+Library parse(Str schema) {
+  Parser p {};
+  p.start_line(schema.begin());
+
+  ArrayList<char> names;
+  List<u32> struct_names;
+  ArrayList<LibraryMember> members;
+  for (auto struct_: range(len(p.struct_type))) {
+    auto type = p.struct_type[struct_];
+    auto name = p.types[type];
+    auto name_id = find_or_add(names, name);
+    struct_names.push(name_id);
+
+    auto member_name = p.struct_member_name[struct_];
+    auto member_info = p.struct_member[struct_];
+    members.push_empty(0);
+    for (auto member: range(len(member_info))) {
+      auto name = member_name[member];
+      auto name_id = find_or_add(names, name);
+      auto info = member_info[member];
+      check(info.type < BasicTypeCount);
+      last_push(members, LibraryMember {name_id, BasicType(info.type)});
+    }
+    println("};\n"_s);
+  }
+  Library ans;
+  ans.names = names.take();
+  ans.struct_names = struct_names.take();
+  ans.struct_member = members.take();
+  
+  return ans;
+}
+
+u8 operator""_u8(unsigned long long x) {
+  check(x <= 255);
+  return u8(x);
+}
+
+void test_print_value() {
+  auto types = parse(R"(
+struct Person
+  age u8
+  weight u8
+  )"_s);
+  auto personType = types.type("Person"_s);
+  auto data = make_struct(personType, 27_u8, 150_u8);
+  check(data.span() == "\33\226"_s);
+
+  Print p;
+  print_struct(p, types, personType, data);
+  check(p.chars.span() == "Person age=27 weight=150"_s);
+}
+
 }
 
 void parse() {
@@ -401,6 +507,9 @@ log LogType
   BadIslTime
   RanDod
 )"_s);
+  test_print_value();
+  println("Parse tests passed");
+  exit(0);
 }
 
 }
