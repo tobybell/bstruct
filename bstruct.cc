@@ -1,6 +1,7 @@
 #include "backend.hh"
 #include "stub.hh"
-#include "array.hh"
+#include "print.hh"
+#include "stream.hh"
 
 #include <cstdlib>
 #include <unistd.h>
@@ -15,8 +16,6 @@ void parse();
 
 char buf[4096 * 4096];
 
-
-using String = Array<char>;
 using StringList = ArrayList<char>;
 
 enum Builtin { U32 };
@@ -98,7 +97,7 @@ void try_program(void (*prog)(Backend&)) {
   Stream out;
   lang::Backend b {out};
   prog(b);
-  Executable exec (out.str());
+  Executable exec (out.bytes);
   auto fn = exec.as<void>();
   println("Try running it..."_s);
   fn();
@@ -119,7 +118,7 @@ int main() {
     b.add(rsp, 8);
     b.ret();
     println("Try running it..."_s);
-    Executable exec (out.str());
+    Executable exec (out.bytes);
     auto fn = exec.as<void>();
     fn();
   }
@@ -145,7 +144,7 @@ int main() {
     b.add(rsp, 8);
     b.ret();
     println("Try running it..."_s);
-    Executable exec (out.str());
+    Executable exec (out.bytes);
     auto fn = exec.as<u32, int, int*>();
 
     int nums[] {1,2,3,4,5};

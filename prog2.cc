@@ -1,11 +1,12 @@
 #include "backend.hh"
 #include "stub.hh"
+#include "print.hh"
 
 using namespace lang;
 
 namespace {
   
-thread_local Stream s;
+thread_local Print s;
 
 void print_value(u64 const*);
 
@@ -61,10 +62,10 @@ void print_value(u64 const* object) {
 }
 
 void print_stub(u64 const* words) {
-  s.size = 0;
+  s.chars.size = 0;
   print_value(words);
   sprint(s, '\n');
-  write(1, s.data, s.size);
+  write_cerr(s.chars);
 }
 
 void* alloc_stub() {

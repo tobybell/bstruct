@@ -1,10 +1,15 @@
 #include "common.hh"
+#include "print.hh"
 #include "array.hh"
 
 #define tail [[clang::musttail]] return
 #define unreachable abort()
 
-using std::forward;
+template <class T>
+void last_push(ArrayList<T>& list, T const& x) {
+  list.list.push(x);
+  ++list.ofs[len(list.ofs) - 1];
+}
 
 namespace lang {
 
@@ -212,7 +217,7 @@ struct Parser {
       }
     }
     struct_member_name.last_push(name);
-    struct_member.last_push(member);
+    last_push(struct_member, member);
     tail start_line(it + 1);
   }
 
@@ -223,12 +228,12 @@ struct Parser {
     spaces(it);
     check(*it == '\n');
     auto struct_ = find(struct_type.span(), *type);
-    log_member_struct.last_push(*struct_);
+    last_push(log_member_struct, *struct_);
     tail start_line(it + 1);
   }
 
   MaybeU32 find_type(Str name) {
-    return find(types.span(), name);
+    return find(span(types), name);
   }
 
   void struct_(char const* it) {
@@ -359,13 +364,13 @@ void test_roundtrip(Str s) {
   for (auto log: range(n_log)) {
     auto type = p.log_type[log];
     auto member_struct = p.log_member_struct[log];
-    Stream s;
+    Print s;
     sprint(s, "struct "_s, p.types[type], ": Log<"_s);
     sprint(s, p.types[p.struct_type[member_struct[0]]]);
     for (auto member: range(1, len(member_struct)))
       sprint(s, ", "_s, p.types[p.struct_type[member_struct[member]]]);
     sprint(s, "> {};"_s);
-    println(s.str(), '\n');
+    println(s.chars, '\n');
   }
 }
 

@@ -1,6 +1,7 @@
 #include "backend.hh"
 
 #include "bytes.hh"
+#include "print.hh"
 
 #include <vector>
 #include <cstddef>
@@ -17,6 +18,11 @@ using std::endl;
 using std::ostream;
 
 namespace lang {
+
+void todo(Str s) {
+  println("TODO: "_s, s);
+  abort();
+}
 
 struct nu8 {
   u8 value;
@@ -89,7 +95,7 @@ constexpr auto as_i32(u64 x) -> i32 {
 }
 
 void put_one(Stream& s, u64 ofs, u8 byte) {
-  s.data[ofs] = static_cast<char>(byte);
+  s.bytes[ofs] = static_cast<char>(byte);
 }
 
 // Create an 8-bit relative reference to placholder `ph` at offset `ofs` in
@@ -106,11 +112,11 @@ static void rel8(Backend& b, placeholder ph, offset ofs) {
 }
 
 u8* data_ptr(Stream& s, u64 ofs) {
-  return reinterpret_cast<u8*>(&s.data[ofs]);
+  return reinterpret_cast<u8*>(&s.bytes[ofs]);
 }
 
 u8 const* data_ptr(Stream const& s, u64 ofs) {
-  return (u8 const*) (&s.data[ofs]);
+  return (u8 const*) (&s.bytes[ofs]);
 }
 
 // Create a 32-bit relative reference to placholder `ph` at offset `ofs` in
@@ -147,7 +153,7 @@ static void label(Backend& b, placeholder p, offset x) {
 }
 
 void Backend::label(placeholder x) {
-  lang::label(*this, x, output.size);
+  lang::label(*this, x, len(output));
 }
 
 static auto g_prefix(reg64 r1, reg64 r2) -> u8 {
@@ -156,9 +162,9 @@ static auto g_prefix(reg64 r1, reg64 r2) -> u8 {
 
 void write(Stream& v, auto... x) {
   v.reserve((... + encode_upper_bound(x)));
-  auto it = data_ptr(v, v.size);
+  auto it = data_ptr(v, len(v));
   ((it = encode(x, it)),...);
-  v.size = static_cast<u32>(it - data_ptr(v, 0));
+  v.grow(reinterpret_cast<char*>(it));
 }
 
 void Backend::sub(reg64 r1, reg64 r2) {
@@ -349,12 +355,12 @@ void Backend::test(reg16 r1, reg16 r2) {
 
 void Backend::jmp(rel8_linkable_address a) {
   write(output, 0xeb_uc, u8(0));
-  rel8(*this, a.ph, output.size - 1);
+  rel8(*this, a.ph, len(output) - 1);
 }
 
 void Backend::jmp(rel32_linkable_address a) {
   write(output, 0xe9_uc, u32(0));
-  rel32(*this, a.ph, output.size - 4);
+  rel32(*this, a.ph, len(output) - 4);
 }
 
 void Backend::jmp(reg64 r) {
@@ -365,27 +371,27 @@ void Backend::jmp(reg64 r) {
 
 void Backend::jge(rel8_linkable_address a) {
   write(output, 0x7d_uc, u8(0));
-  rel8(*this, a.ph, output.size - 1);
+  rel8(*this, a.ph, len(output) - 1);
 }
 
 void Backend::je(rel8_linkable_address a) {
   write(output, 0x74_uc, u8(0));
-  rel8(*this, a.ph, output.size - 1);
+  rel8(*this, a.ph, len(output) - 1);
 }
 
 void Backend::je(rel32_linkable_address a) {
   write(output, 0x0f_uc, 0x84_uc, u32(0));
-  rel32(*this, a.ph, output.size - 4);
+  rel32(*this, a.ph, len(output) - 4);
 }
 
 void Backend::jne(rel8_linkable_address a) {
   write(output, 0x75_uc, u8(0));
-  rel8(*this, a.ph, output.size - 1);
+  rel8(*this, a.ph, len(output) - 1);
 }
 
 void Backend::jne(rel32_linkable_address a) {
   write(output, 0x0f_uc, 0x85_uc, u32(0));
-  rel32(*this, a.ph, output.size - 4);
+  rel32(*this, a.ph, len(output) - 4);
 }
 
 void Backend::pop(reg64 r) {
@@ -407,12 +413,12 @@ void Backend::mov(reg64 r, int64_t n) { mov(r, static_cast<uint64_t>(n)); }
 
 void write_from(Stream& v, u8 const* data, u32 size) {
   v.reserve(size);
-  memcpy(&v.data[v.size], data, size);
-  v.size += size;
+  memcpy(&v.bytes[len(v)], data, size);
+  v.grow(size);
 }
 
 void write_from(Stream& v, Stream const& v2) {
-  write_from(v, data_ptr(v2, 0), v2.size);
+  write_from(v, data_ptr(v2, 0), len(v2));
 }
 
 static auto xchg_rax(Backend& b, reg64 r) {
@@ -489,7 +495,7 @@ void Backend::mov(reg32 r1, indir<reg64> r2) {
 void Backend::mov(reg64 r, rel32_linkable_address a) {
   check(r.id < 8);
   write(output, 0x48_uc | (r.id >= 8), 0x8d_uc, 0x00_uc | (code(r) << 3) | 0b101_uc, u32(0));
-  rel32(*this, a.ph, output.size - 4);
+  rel32(*this, a.ph, len(output) - 4);
 }
 
 // TODO: Turn this into explicit lea from rip.
@@ -509,7 +515,7 @@ void Backend::syscall() {
 
 void Backend::call(rel32_linkable_address a) {
   write(output, 0xe8_uc, u32(0));
-  rel32(*this, a.ph, output.size - 4);
+  rel32(*this, a.ph, len(output) - 4);
 }
 
 void Backend::call(reg64 r) {
@@ -538,12 +544,12 @@ void Backend::literal(Str s) {
 
 void Backend::dump_output() {
   size_t i = 0;
-  while (i < output.size) {
+  while (i < len(output)) {
     for (int c = 0; c < 16; ++c) {
-      uint8_t b = u8(output.data[i]);
+      uint8_t b = u8(output.bytes[i]);
       cerr << hex(b >> 4) << hex(b) << ' ';
       i += 1;
-      if (i == output.size) break;
+      if (i == len(output)) break;
     }
     cerr << endl;
   }
@@ -554,7 +560,7 @@ placeholder Backend::ph() { return {placeholder_counter++}; }
 void append(Backend& b1, const Backend& b2) {
   auto& b1o = b1.output;
   auto& b2o = b2.output;
-  auto b1n = b1o.size;
+  auto b1n = len(b1o);
 
   write_from(b1o, b2o);
 
@@ -572,9 +578,9 @@ void append(Backend& b1, const Backend& b2) {
 }
 
 Executable::Executable(Str output) {
-  data = mmap(0, output.size, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  size = output.size;
-  memcpy(data, output.base, output.size);
+  data = mmap(0, len(output), PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  size = len(output);
+  memcpy(data, output.base, len(output));
 }
 
 Executable::~Executable() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.hh"
+#include "stream.hh"
 
 #include <map>
 #include <vector>
@@ -14,7 +15,7 @@ struct indir {
   i32 ofs {};
 };
 
-static constexpr uptr n_regs = 16;
+static constexpr usize n_regs = 16;
 
 struct reg64 {
   u8 id;
