@@ -509,7 +509,6 @@ log LogType
 )"_s);
   test_print_value();
   println("Parse tests passed");
-  exit(0);
 }
 
 }

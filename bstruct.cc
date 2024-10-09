@@ -51,30 +51,38 @@ char const* print_u32(char const* i) {
   return i + 4;
 }
 
+char const* print_field(Struct& s, u32 i, char const* it) {
+  auto name = s.names[i];
+  ::write(1, name.base, name.size);
+  ::write(1, "=", 1);
+
+  u32 arr_sz = s.array_size[i];
+  if (arr_sz) {
+    u32 array_size = arr_sz - 1;
+    ::write(1, "[", 1);
+    if (array_size) {
+      it = print_u32(it);
+      for (u32 j = 1; j < array_size; ++j) {
+        ::write(1, " ", 1);
+        it = print_u32(it);
+      }
+    }
+    ::write(1, "]", 1);
+  } else {
+    it = print_u32(it);
+  }
+
+  return it;
+}
+
 void test_case(Struct& s, Span<char> data) {
   char const* it = data.base;
-  for (u32 i = 0; i < len(s.names); ++i) {
-    auto name = s.names[i];
-    ::write(1, name.base, name.size);
-    ::write(1, ": ", 2);
-
-    u32 arr_sz = s.array_size[i];
-    if (arr_sz) {
-      u32 array_size = arr_sz - 1;
-      ::write(1, "[", 1);
-      if (array_size) {
-        it = print_u32(it);
-        for (u32 j = 1; j < array_size; ++j) {
-          ::write(1, ", ", 2);
-          it = print_u32(it);
-        }
-      }
-      ::write(1, "]", 1);
-    } else {
-      it = print_u32(it);
-    }
-    ::write(1, "\n", 1);
+  it = print_field(s, 0, it);
+  for (u32 i = 1; i < len(s.names); ++i) {
+    ::write(1, " ", 1);
+    it = print_field(s, i, it);
   }
+  ::write(1, "\n", 1);
 }
 
 /*
@@ -107,55 +115,55 @@ int main() {
 
   parse();
 
-  try_program(prog1);
-  try_program(prog2);
+  // try_program(prog1);
+  // try_program(prog2);
 
-  {
-    Stream out;
-    lang::Backend b {out};
-    b.sub(rsp, 8);
-    call_stub(b, my_stub, 5, 6, 7);
-    b.add(rsp, 8);
-    b.ret();
-    println("Try running it..."_s);
-    Executable exec (out.bytes);
-    auto fn = exec.as<void>();
-    fn();
-  }
+  // {
+  //   Stream out;
+  //   lang::Backend b {out};
+  //   b.sub(rsp, 8);
+  //   call_stub(b, my_stub, 5, 6, 7);
+  //   b.add(rsp, 8);
+  //   b.ret();
+  //   println("Try running it..."_s);
+  //   Executable exec (out.bytes);
+  //   auto fn = exec.as<void>();
+  //   fn();
+  // }
 
-  {
-    Stream out;
-    lang::Backend b {out};
-    b.sub(rsp, 8);
-    auto ph1 = b.ph();
-    auto ph2 = b.ph();
-    b.mov(rax, 0);
-    b.jmp(rel8(ph1));
-    b.label(ph2);
-    b.add(rax, indir<reg64> {rsi, 0});
-    b.add(rsi, 4);
-    b.sub(rdi, 1);
-    b.label(ph1);
-    b.cmp(rdi, 0);
-    b.jne(rel8(ph2));
-    b.push(rax);
-    call_stub(b, my_stub, 5, 6, 7);
-    b.pop(rax);
-    b.add(rsp, 8);
-    b.ret();
-    println("Try running it..."_s);
-    Executable exec (out.bytes);
-    auto fn = exec.as<u32, int, int*>();
+  // {
+  //   Stream out;
+  //   lang::Backend b {out};
+  //   b.sub(rsp, 8);
+  //   auto ph1 = b.ph();
+  //   auto ph2 = b.ph();
+  //   b.mov(rax, 0);
+  //   b.jmp(rel8(ph1));
+  //   b.label(ph2);
+  //   b.add(rax, indir<reg64> {rsi, 0});
+  //   b.add(rsi, 4);
+  //   b.sub(rdi, 1);
+  //   b.label(ph1);
+  //   b.cmp(rdi, 0);
+  //   b.jne(rel8(ph2));
+  //   b.push(rax);
+  //   call_stub(b, my_stub, 5, 6, 7);
+  //   b.pop(rax);
+  //   b.add(rsp, 8);
+  //   b.ret();
+  //   println("Try running it..."_s);
+  //   Executable exec (out.bytes);
+  //   auto fn = exec.as<u32, int, int*>();
 
-    int nums[] {1,2,3,4,5};
+  //   int nums[] {1,2,3,4,5};
 
-    auto ans = fn(1, nums);
-    println("Result was "_s, ans);
-    ans = fn(2, nums);
-    println("Result was "_s, ans);
-    ans = fn(3, nums);
-    println("Result was "_s, ans);
-  }
+  //   auto ans = fn(1, nums);
+  //   println("Result was "_s, ans);
+  //   ans = fn(2, nums);
+  //   println("Result was "_s, ans);
+  //   ans = fn(3, nums);
+  //   println("Result was "_s, ans);
+  // }
 
   {
     Struct s;
