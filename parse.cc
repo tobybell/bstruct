@@ -401,9 +401,22 @@ void test_roundtrip(Str s) {
   check(!memcmp(buf.chars.begin(), s.base, len(buf.chars)));
 }
 
+struct Type {
+  u32 id;
+  bool is_basic() const { return id < BasicTypeCount; }
+  BasicType basic_type() const {
+    check(is_basic());
+    return BasicType(id);
+  }
+  u32 custom_type() const {
+    check(!is_basic());
+    return id - BasicTypeCount;
+  }
+};
+
 struct LibraryMember {
   u32 name;
-  BasicType type;
+  Type type;
 };
 
 struct LibraryStruct {
@@ -413,7 +426,7 @@ struct LibraryStruct {
 };
 
 void write_member(Stream& s, LibraryMember m, u8 arg) {
-  check(m.type == U8);
+  check(m.type.basic_type() == U8);
   memcpy(s.reserve(1), &arg, 1);
   s.grow(1);
 }
@@ -444,17 +457,67 @@ struct Library {
   }
 };
 
+template <class T>
+char const* print_basic_type(Print& p, char const* it) {
+  sprint(p, *(T const*) it);
+  return it + sizeof(T);
+}
+
+char const* print_basic_type(Print& p, BasicType t, char const* it) {
+  switch (t) {
+    case U8:
+      return print_basic_type<u8>(p, it);
+    case U16:
+      return print_basic_type<u16>(p, it);
+    case U32:
+      return print_basic_type<u32>(p, it);
+    case U64:
+      return print_basic_type<u64>(p, it);
+    case I8:
+      return print_basic_type<i8>(p, it);
+    case I16:
+      return print_basic_type<i16>(p, it);
+    case I32:
+      return print_basic_type<i32>(p, it);
+    case I64:
+      return print_basic_type<i64>(p, it);
+    case F32:
+      return print_basic_type<f32>(p, it);
+    case F64:
+      return print_basic_type<f64>(p, it);
+    default:
+      unreachable;
+  }
+}
+
+char const* print_custom_type(Print& p, Library const& l, u32 t, char const* it);
+
+char const* print_value(Print& p, Library const& l, Type t, char const* it) {
+  if (t.is_basic())
+    return print_basic_type(p, t.basic_type(), it);
+  return print_custom_type(p, l, t.custom_type(), it);
+}
+
 char const* print_member(Print& p, Library const& l, LibraryMember s, char const* it) {
+  check(s.type.basic_type() == U8);
   sprint(p, ' ', l.names[s.name], '=', u8(*it++));
   return it;
 }
 
-void print_struct(Print& p, Library const& l, LibraryStruct s, Str b) {
-  auto it = b.begin();
+char const* print_struct(Print& p, Library const& l, LibraryStruct s, char const* it) {
   sprint(p, l.names[s.name]);
   for (u32 i: range(s.memberCount)) {
     it = print_member(p, l, s.member[i], it);
   }
+  return it;
+}
+
+void print_struct(Print& p, Library const& l, LibraryStruct s, Str b) {
+  print_struct(p, l, s, b.begin());
+}
+
+char const* print_custom_type(Print& p, Library const& l, u32 t, char const* it) {
+  return print_struct(p, l, l.type(t), it);
 }
 
 u32 find_or_add(ArrayList<char>& strs, Str str) {
@@ -486,8 +549,9 @@ Library parse(Str schema) {
       auto name = member_name[member];
       auto name_id = find_or_add(names, name);
       auto info = member_info[member];
+      check(info.array == NoArray);
       check(info.type < BasicTypeCount);
-      last_push(members, LibraryMember {name_id, BasicType(info.type)});
+      last_push(members, LibraryMember {name_id, {info.type}});
     }
   }
   Library ans;
@@ -504,10 +568,23 @@ u8 operator""_u8(unsigned long long x) {
 }
 
 void test_print_value() {
-  auto types = parse(R"(
-struct Person
+  auto types = parse(R"(struct Person
   age u8
   weight u8
+  )"_s);
+  auto personType = types.type("Person"_s);
+  auto data = make_struct(personType, 27_u8, 150_u8);
+  check(data.span() == "\33\226"_s);
+
+  Print p;
+  print_struct(p, types, personType, data);
+  check(p.chars.span() == "Person age=27 weight=150"_s);
+}
+
+void test_print_value_array() {
+  auto types = parse(R"(struct Person
+  name_len u32
+  name[name_len] u8
   )"_s);
   auto personType = types.type("Person"_s);
   auto data = make_struct(personType, 27_u8, 150_u8);
@@ -545,6 +622,7 @@ log LogType
   RanDod
 )"_s);
   test_print_value();
+  test_print_value_array();
   println("Parse tests passed");
 }
 

@@ -16,6 +16,8 @@ void print(i16 x, Print&);
 void print(i32 x, Print&);
 void print(i64 x, Print&);
 void print(void* x, Print&);
+void print(f32 x, Print&);
+void print(f64 x, Print&);
 inline void print(char x, Print& p) { p.chars.push(x); }
 inline void print(char const* x, Print& p) { extend(p.chars, to_str(x)); }
 inline void print(Str x, Print& p) { extend(p.chars, x); }

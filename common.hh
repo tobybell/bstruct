@@ -24,6 +24,8 @@ using i8 = signed char;
 using i16 = signed short;
 using i32 = signed;
 using i64 = signed long long;
+using f32 = float;
+using f64 = double;
 
 #define unimplemented abort()
 #define unreachable   abort()

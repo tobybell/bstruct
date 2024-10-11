@@ -35,6 +35,10 @@ void print(i32 x, Print& s) { do_snprint(s, 12, "%d", x); }
 
 void print(i64 x, Print& s) { do_snprint(s, 22, "%lld", (long long) x); }
 
+void print(f32 x, Print& s) { do_snprint(s, 16, "%.9g", x); }
+
+void print(f64 x, Print& s) { do_snprint(s, 31, "%.17g", x); }
+
 void print(void* x, Print& s) {
   do_snprint(s, 3 + 2 * sizeof(void*), "%p", x);
 }
