@@ -325,9 +325,7 @@ struct Parser {
   }
 };
 
-void test_roundtrip(Str s) {
-  Parser p {};
-  p.start_line(s.begin());
+void print_to_cpp(Parser const& p) {
   for (auto struct_: range(len(p.struct_type))) {
     auto type = p.struct_type[struct_];
     auto member_name = p.struct_member_name[struct_];
@@ -360,6 +358,47 @@ void test_roundtrip(Str s) {
     sprint(s, "> {};"_s);
     println(s.chars, '\n');
   }
+};
+
+void print_to_bstruct(Parser const& p, Print& s) {
+  for (auto struct_: range(len(p.struct_type))) {
+    auto type = p.struct_type[struct_];
+    auto member_name = p.struct_member_name[struct_];
+    auto member_info = p.struct_member[struct_];
+    sprint(s, "struct "_s, p.types[type], '\n');
+    for (auto member: range(len(member_info))) {
+      auto name = member_name[member];
+      auto info = member_info[member];
+      sprint(s, "  "_s, name);
+      if (info.array == FixedArray)
+        sprint(s, '[', info.length, ']');
+      else if (info.array == MemberArray)
+        sprint(s, '[', member_name[info.length], ']');
+      else if (info.array != NoArray)
+        unreachable;
+      sprint(s, ' ', p.types[info.type], '\n');
+    }
+    sprint(s, '\n');
+  }
+
+  auto n_log = len(p.log_type);
+  for (auto log: range(n_log)) {
+    auto type = p.log_type[log];
+    auto member_struct = p.log_member_struct[log];
+    sprint(s, "log "_s, p.types[type], '\n');
+    for (u32 member: range(len(member_struct)))
+      sprint(s, "  "_s, p.types[p.struct_type[member_struct[member]]], '\n');
+  }
+}
+
+void test_roundtrip(Str s) {
+  Parser p {};
+  p.start_line(s.begin());
+//  print_to_cpp(p);
+  Print buf;
+  print_to_bstruct(p, buf);
+  check(len(buf.chars) == len(s));
+  check(!memcmp(buf.chars.begin(), s.base, len(buf.chars)));
 }
 
 struct LibraryMember {
@@ -450,7 +489,6 @@ Library parse(Str schema) {
       check(info.type < BasicTypeCount);
       last_push(members, LibraryMember {name_id, BasicType(info.type)});
     }
-    println("};\n"_s);
   }
   Library ans;
   ans.names = names.take();
@@ -483,8 +521,7 @@ struct Person
 }
 
 void parse() {
-  test_roundtrip(R"(
-struct DroppedGpsMessage
+  test_roundtrip(R"(struct DroppedGpsMessage
   count u16
   reason[count] u8
 
