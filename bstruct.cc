@@ -1,7 +1,6 @@
 #include "backend.hh"
 #include "stub.hh"
 #include "print.hh"
-#include "stream.hh"
 
 #include <cstdlib>
 #include <unistd.h>
@@ -105,7 +104,7 @@ void try_program(void (*prog)(Backend&)) {
   Stream out;
   lang::Backend b {out};
   prog(b);
-  Executable exec (out.bytes);
+  Executable exec (out);
   auto fn = exec.as<void>();
   println("Try running it..."_s);
   fn();

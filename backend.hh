@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common.hh"
-#include "stream.hh"
 
 #include <map>
 #include <vector>

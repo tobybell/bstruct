@@ -1,6 +1,8 @@
 #pragma once
 
 using usize = unsigned long;
+using uptr = unsigned long;
+using iptr = long;
 
 extern "C" {
 
@@ -318,6 +320,9 @@ struct AnyTypes<Any<T...>> {
   using type = Types<T...>;
 };
 
+template <class T>
+constexpr bool is_trivially_copyable = __is_trivially_copyable(T);
+
 template <class T, class S>
 constexpr u32 any_index = type_index<typename AnyTypes<T>::type, S>;
 
@@ -341,6 +346,10 @@ struct Span {
   friend T const& last(Span const& span) {
     check(!!span);
     return span[len(span) - 1];
+  }
+  bool operator==(Span<T> const& y) const {
+    static_assert(is_trivially_copyable<T>);
+    return size == y.size && !memcmp(base, y.base, size * sizeof(T));
   }
 };
 
@@ -426,16 +435,20 @@ struct Array {
   friend u32 len(Array const& list) { return list.size; }
   T& operator[](u32 index) { return data[index]; }
   T const& operator[](u32 index) const { return data[index]; }
-  Span<T> span() const { return {data, size}; }
   Mut<T> mut() { return {data, size}; }
 
   explicit operator bool() { return size; }
   operator Mut<T>() { return {data, size}; }
   operator Span<T>() const { return {data, size}; }
 
+  Span<T> span() const { return *this; }
+
   friend T const& last(Array const& arr) {
     check(arr.size);
     return arr.data[arr.size - 1];
+  }
+  bool operator==(Span<T> const& y) const {
+    return span() == y;
   }
 };
 
@@ -538,6 +551,11 @@ struct List {
     }
   }
 
+  T* reserve(u32 n) {
+    expand(size + n);
+    return data + size;
+  }
+
   void resize(u32 new_size) {
     capacity = new_size;
     size = new_size;
@@ -568,6 +586,7 @@ struct List {
 };
 
 using String = Array<char>;
+using Stream = List<char>;
 
 struct RangePtr {
   u32 value;
@@ -804,9 +823,6 @@ private:
 };
 
 #define dump(x) println(#x, ": ", x)
-
-template <class T>
-constexpr bool is_trivially_copyable = __is_trivially_copyable(T);
 
 template <class T, class... S>
 using ReturnType = decltype(declval<T>()(declval<S>()...));
