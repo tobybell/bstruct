@@ -1,4 +1,4 @@
-CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -Og -g -fno-exceptions
+CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -O0 -g -fno-exceptions
 
 MODULES=bstruct print backend prog1 prog2 parse
 OBJECTS=$(MODULES:%=build/%.o)
