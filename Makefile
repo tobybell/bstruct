@@ -1,6 +1,6 @@
 CFLAGS=-isysroot $(SYSROOT) -std=c++20 -Wall -Wextra -Wconversion -O0 -g -fno-exceptions
 
-MODULES=bstruct print backend prog1 prog2 parse
+MODULES=bstruct print backend prog1 prog2 parse cpp-gen-test
 OBJECTS=$(MODULES:%=build/%.o)
 
 .PHONY: run

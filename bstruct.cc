@@ -1,6 +1,5 @@
 #include "backend.hh"
 #include "stub.hh"
-#include "print.hh"
 
 #include <cstdlib>
 #include <unistd.h>
@@ -110,9 +109,11 @@ void try_program(void (*prog)(Backend&)) {
   fn();
 }
 
-int main() {
+void test_cpp_generation();
 
+int main() {
   parse();
+  test_cpp_generation();
 
   // try_program(prog1);
   // try_program(prog2);

@@ -1,7 +1,5 @@
 #include "common.hh"
-#include "print.hh"
 #include "array.hh"
-#include "stream.hh"
 
 #define tail [[clang::musttail]] return
 #define unreachable abort()
@@ -330,41 +328,6 @@ struct Parser {
   }
 };
 
-void print_to_cpp(Parser const& p) {
-  for (auto struct_: range(len(p.struct_type))) {
-    auto type = p.struct_type[struct_];
-    auto member_name = p.struct_member_name[struct_];
-    auto member_info = p.struct_member[struct_];
-    println("struct "_s, p.types[type], " {"_s);
-    for (auto member: range(len(member_info))) {
-      auto name = member_name[member];
-      auto info = member_info[member];
-      if (info.array == NoArray)
-        println("  "_s, p.types[info.type], ' ', name, ';');
-      else if (info.array == FixedArray)
-        println("  "_s, p.types[info.type], ' ', name, '[', info.length, "];"_s);
-      else if (info.array == MemberArray) {
-        println("  "_s, p.types[info.type], " const* "_s, name, ';');
-      } else
-        unreachable;
-    }
-    println("};\n"_s);
-  }
-
-  auto n_log = len(p.log_type);
-  for (auto log: range(n_log)) {
-    auto type = p.log_type[log];
-    auto member_struct = p.log_member_struct[log];
-    Print s;
-    sprint(s, "struct "_s, p.types[type], ": Log<"_s);
-    sprint(s, p.types[p.struct_type[member_struct[0]]]);
-    for (auto member: range(1, len(member_struct)))
-      sprint(s, ", "_s, p.types[p.struct_type[member_struct[member]]]);
-    sprint(s, "> {};"_s);
-    println(s.chars, '\n');
-  }
-};
-
 void print_to_bstruct(Parser const& p, Print& s) {
   for (auto struct_: range(len(p.struct_type))) {
     auto type = p.struct_type[struct_];
@@ -399,7 +362,6 @@ void print_to_bstruct(Parser const& p, Print& s) {
 void test_roundtrip(Str s) {
   Parser p {};
   p.start_line(s.begin());
-//  print_to_cpp(p);
   Print buf;
   print_to_bstruct(p, buf);
   check(len(buf.chars) == len(s));
@@ -436,12 +398,12 @@ void write_member(Stream& s, LibraryStruct, LibraryMember m, u8 arg) {
   switch (m.type.basic_type()) {
     case U8:
       memcpy(s.reserve(1), &arg, 1);
-      s.grow(1);
+      s.size += 1;
       break;
     case U32: {
       u32 x = arg;
       memcpy(s.reserve(4), &x, 4);
-      s.grow(4);
+      s.size += 4;
       break;
     }
     default:
@@ -470,7 +432,7 @@ uptr array_length(Stream& s, LibraryStruct st, LibraryMember m) {
   if (m.array == FixedArray)
     return m.length;
   if (m.array == MemberArray)
-    return get_field(s.bytes.begin(), st, m.length);
+    return get_field(s.begin(), st, m.length);
   unreachable;
 }
 
@@ -479,7 +441,7 @@ void write_member(Stream& s, LibraryStruct st, LibraryMember m, u8 const (&arg)[
   check(m.type.basic_type() == U8);
   check(array_length(s, st, m) == N);
   memcpy(s.reserve(N), &arg, N);
-  s.grow(N);
+  s.size += N;
 }
 
 template <class... T>
@@ -487,7 +449,7 @@ String make_struct(LibraryStruct s, T&&... args) {
   Stream out;
   auto m = s.member;
   (write_member(out, s, *m++, forward<T>(args)),...);
-  return out.bytes.take();
+  return out.take();
 };
 
 struct Library {
