@@ -93,10 +93,8 @@ struct ArrayArrayList {
   ArrayList<T> list;
   List<u32> ofs;
 
-  ArrayArrayList() { ofs.push(0); }
-
   void push_empty() {
-    ofs.push(last(ofs));
+    ofs.push(ofs ? last(ofs) : 0);
   }
 
   void last_push(Span<T> items) {
@@ -104,11 +102,11 @@ struct ArrayArrayList {
     ++last(ofs);
   }
 
-  friend u32 len(ArrayArrayList const& list) { return list.ofs.size - 1; }
+  friend u32 len(ArrayArrayList const& list) { return list.ofs.size; }
   ArraySpan<T> operator[](u32 i) const {
-    auto end = ofs[i + 1];
-    auto begin = ofs[i];
-    return {list.list.begin(), {list.ofs.begin() + begin, ++end - begin}};
+    auto end = ofs[i];
+    auto begin = i ? ofs[i - 1] : 0;
+    return {list.list.begin(), {list.ofs.begin() + begin, end - begin}, begin ? list.ofs[begin - 1] : 0};
   }
   friend ArraySpan<T> last(ArrayArrayList<T> const& list) {
     return list[len(list) - 1];
@@ -136,29 +134,33 @@ enum BasicType: u8 {
 
 constexpr u32 BasicTypeSize[BasicTypeCount] {1, 2, 4, 8, 1, 2, 4, 8, 4, 8};
 
+constexpr char BasicTypeName[] = "u8u16u32u64i8i16i32i64f32f64";
+constexpr u32 BasicTypeNameEnd[] {2, 5, 8, 11, 13, 16, 19, 22, 25, 28};
+
+Str basic_type_name(u32 i) {
+  auto begin = i ? BasicTypeNameEnd[i - 1] : 0u;
+  return {BasicTypeName + begin, BasicTypeNameEnd[i] - begin};
+}
+
 struct Parser {
   List<u32> indent {};
   enum { Struct, Log } cur_decl {};
 
-  StrList types;
+  StrList type_names;
   List<u32> struct_type;
   StrArrayList struct_member_name;
   ArrayList<Member> struct_member;
   List<u32> log_type;
   ArrayList<u32> log_member_struct;
 
+  Str get_type_name(u32 i) const {
+    if (i < BasicTypeCount)
+      return basic_type_name(i);
+    return type_names[i - BasicTypeCount];
+  }
+
   Parser() {
     indent.push(0);
-    types.push("u8"_s);
-    types.push("u16"_s);
-    types.push("u32"_s);
-    types.push("u64"_s);
-    types.push("i8"_s);
-    types.push("i16"_s);
-    types.push("i32"_s);
-    types.push("i64"_s);
-    types.push("f32"_s);
-    types.push("f64"_s);
   }
 
   template <class... T>
@@ -242,7 +244,10 @@ struct Parser {
   }
 
   MaybeU32 find_type(Str name) {
-    return find(span(types), name);
+    auto i = find(span(type_names), name);
+    if (!i)
+      return find(ArraySpan<char> {BasicTypeName, BasicTypeNameEnd}, name);
+    return *i + BasicTypeCount;
   }
 
   void struct_(char const* it) {
@@ -255,8 +260,8 @@ struct Parser {
     auto cur_struct = str_between(name_begin, it);
     if (find_type(cur_struct))
       return fail("redefinition of "_s, cur_struct);
-    u32 type = len(types);
-    types.push(cur_struct);
+    u32 type = len(type_names) + BasicTypeCount;
+    type_names.push(cur_struct);
     struct_type.push(type);
     struct_member_name.push_empty();
     struct_member.push_empty(0);
@@ -276,8 +281,8 @@ struct Parser {
     auto name = str_between(name_begin, it);
     if (find_type(name))
       return fail("redefinition of "_s, name);
-    auto type = len(types);
-    types.push(name);
+    auto type = BasicTypeCount + len(type_names);
+    type_names.push(name);
     log_type.push(type);
     log_member_struct.push_empty(0);
     while (*it == ' ')
@@ -333,7 +338,8 @@ void print_to_bstruct(Parser const& p, Print& s) {
     auto type = p.struct_type[struct_];
     auto member_name = p.struct_member_name[struct_];
     auto member_info = p.struct_member[struct_];
-    sprint(s, "struct "_s, p.types[type], '\n');
+
+    sprint(s, "struct "_s, p.get_type_name(type), '\n');
     for (auto member: range(len(member_info))) {
       auto name = member_name[member];
       auto info = member_info[member];
@@ -344,7 +350,7 @@ void print_to_bstruct(Parser const& p, Print& s) {
         sprint(s, '[', member_name[info.length], ']');
       else if (info.array != NoArray)
         unreachable;
-      sprint(s, ' ', p.types[info.type], '\n');
+      sprint(s, ' ', p.get_type_name(info.type), '\n');
     }
     sprint(s, '\n');
   }
@@ -353,9 +359,9 @@ void print_to_bstruct(Parser const& p, Print& s) {
   for (auto log: range(n_log)) {
     auto type = p.log_type[log];
     auto member_struct = p.log_member_struct[log];
-    sprint(s, "log "_s, p.types[type], '\n');
+    sprint(s, "log "_s, p.get_type_name(type), '\n');
     for (u32 member: range(len(member_struct)))
-      sprint(s, "  "_s, p.types[p.struct_type[member_struct[member]]], '\n');
+      sprint(s, "  "_s, p.get_type_name(p.struct_type[member_struct[member]]), '\n');
   }
 }
 
@@ -567,7 +573,7 @@ Library parse(Str schema) {
   ArrayList<LibraryMember> members;
   for (auto struct_: range(len(p.struct_type))) {
     auto type = p.struct_type[struct_];
-    auto name = p.types[type];
+    auto name = p.get_type_name(type);
     auto name_id = find_or_add(names, name);
     struct_names.push(name_id);
 

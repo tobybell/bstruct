@@ -334,6 +334,8 @@ struct Span {
   constexpr Span(T const* base_, u32 size_): base(base_), size(size_) {}
   constexpr Span(T const* begin, T const* end): Span(begin, u32(end - begin)) {}
   T const* begin() const { return base; }
+  template <u32 N>
+  constexpr Span(T const (&a)[N]): base(a), size(N) {}
   T const* end() const { return base + size; }
   T const& operator[](u32 index) const { return base[index]; }
   friend u32 len(Span const& x) { return x.size; }
@@ -632,10 +634,12 @@ struct ArrayArray {
 
   friend u32 len(ArrayArray const& array) { return len(array.offsets) - 1; }
   Mut<T> operator[](u32 index) {
-    return {&items[offsets[index]], offsets[index + 1] - offsets[index]};
+    auto begin = index ? offsets[index - 1] : 0;
+    return {items.begin() + begin, offsets[index] - begin};
   }
   Span<T> operator[](u32 index) const {
-    return {&items[offsets[index]], offsets[index + 1] - offsets[index]};
+    auto begin = index ? offsets[index - 1] : 0;
+    return {items.begin() + begin, offsets[index] - begin};
   }
 };
 
@@ -643,10 +647,6 @@ template <class T>
 struct ArrayList {
   List<T> list;
   List<u32> ofs;
-
-  ArrayList() { ofs.push(0); }
-  ArrayList(List<T> list_, List<u32> ofs_):
-    list(::move(list_)), ofs(::move(ofs_)) {}
 
   Mut<T> push_empty(u32 size) {
     auto orig_size = list.size;
@@ -667,14 +667,16 @@ struct ArrayList {
     list.size = ofs.last();
   }
 
-  friend u32 len(ArrayList const& list) { return list.ofs.size - 1; }
+  friend u32 len(ArrayList const& list) { return list.ofs.size; }
   Mut<T> operator[](u32 index) {
-    return {&list[ofs[index]], ofs[index + 1] - ofs[index]};
+    auto begin = index ? ofs[index - 1] : 0;
+    return {list.begin() + begin, ofs[index] - begin};
   }
   Span<T> operator[](u32 index) const {
-    return {&list[ofs[index]], ofs[index + 1] - ofs[index]};
+    auto begin = index ? ofs[index - 1] : 0;
+    return {list.begin() + begin, ofs[index] - begin};
   }
-  explicit operator bool() const { return len(ofs) > 1; }
+  explicit operator bool() const { return !!ofs; }
 
   friend Span<T> last(ArrayList const& list) {
     check(!!list);
