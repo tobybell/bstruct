@@ -33,14 +33,11 @@ using f64 = double;
 #define unreachable   abort()
 
 template <class T>
-struct Type { using type = T; };
-
+struct RemoveReference { using type = T; };
 template <class T>
-struct RemoveReference: Type<T> {};
+struct RemoveReference<T&> { using type = T; };
 template <class T>
-struct RemoveReference<T&>: Type<T> {};
-template <class T>
-struct RemoveReference<T&&>: Type<T> {};
+struct RemoveReference<T&&> { using type = T; };
 template <class T>
 using remove_reference = typename RemoveReference<T>::type;
 
@@ -632,7 +629,7 @@ struct ArrayArray {
   Array<T> items;
   Array<u32> offsets;
 
-  friend u32 len(ArrayArray const& array) { return len(array.offsets) - 1; }
+  friend u32 len(ArrayArray const& array) { return len(array.offsets); }
   Mut<T> operator[](u32 index) {
     auto begin = index ? offsets[index - 1] : 0;
     return {items.begin() + begin, offsets[index] - begin};

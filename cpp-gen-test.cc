@@ -1,5 +1,5 @@
 #include "common.hh"
-//#include "parse.hh"
+#include "parse.hh"
 
 #include <unistd.h>
 #include <sys/wait.h>
@@ -119,6 +119,13 @@ String compile_and_run(Str src) {
 }
 
 void test_cpp_generation() {
+  Library lib = parse(R"(
+struct Person
+  name u32
+  age u32
+)");
+  println(to_bstruct(lib));
+
   //Parser p;
   //Print ps;
   //sprint(ps, ToCpp(p));

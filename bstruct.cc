@@ -8,9 +8,7 @@
 
 using namespace lang;
 
-namespace lang {
 void parse();
-}
 
 char buf[4096 * 4096];
 
