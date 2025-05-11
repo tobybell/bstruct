@@ -1,52 +1,19 @@
 #include "common.hh"
 #include "parse.hh"
 
-#include <unistd.h>
+#include <errno.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 namespace {
 
-//struct ToCpp {
-//  Parser const& p;
-//
-//  void operator()(Print& s) {
-//    for (auto struct_: range(len(p.struct_type))) {
-//      auto type = p.struct_type[struct_];
-//      auto member_name = p.struct_member_name[struct_];
-//      auto member_info = p.struct_member[struct_];
-//      sprint(s, "struct "_s, p.types[type], " {\n"_s);
-//      for (auto member: range(len(member_info))) {
-//        auto name = member_name[member];
-//        auto info = member_info[member];
-//        if (info.array == NoArray)
-//          sprint(s, "  "_s, p.types[info.type], ' ', name, ";\n"_s);
-//        else if (info.array == FixedArray)
-//          sprint(s, "  "_s, p.types[info.type], ' ', name, '[', info.length, "];\n"_s);
-//        else if (info.array == MemberArray) {
-//          sprint(s, "  "_s, p.types[info.type], " const* "_s, name, ";\n"_s);
-//        } else
-//          unreachable;
-//      }
-//      sprint("};\n\n"_s);
-//    }
-//
-//    auto n_log = len(p.log_type);
-//    for (auto log: range(n_log)) {
-//      auto type = p.log_type[log];
-//      auto member_struct = p.log_member_struct[log];
-//      sprint(s, "struct "_s, p.types[type], ": Log<"_s, p.types[p.struct_type[member_struct[0]]]);
-//      for (auto member: range(1, len(member_struct)))
-//        sprint(s, ", "_s, p.types[p.struct_type[member_struct[member]]]);
-//      sprint(s, "> {};\n\n"_s);
-//    }
-//
-//    sprint(s, "int main() {}\n"_s);
-//  }
-//};
-
 void wait_to_exit(pid_t p) {
   int status;
-  check(waitpid(p, &status, 0) == p);
+  pid_t ans;
+  do {
+    ans = waitpid(p, &status, 0);
+  } while (ans == -1 && errno == EINTR);
+  check(ans == p);
   check(WIFEXITED(status));
   check(!WEXITSTATUS(status));
 }
@@ -101,8 +68,8 @@ String compile_and_run(Str src) {
   char tmp[] = "/tmp/XXXXXX";
   int fd = mkstemp(tmp);
 
-  auto [cc, in] = run_subprocess({
-      "/usr/bin/g++", "-o", tmp, "-x", "c++", "-", 0}, In);
+  auto [cc, in] = run_subprocess(
+      {"/usr/bin/g++", "-o", tmp, "-std=c++17", "-x", "c++", "-", 0}, In);
   write_all(in, src);
   wait_to_exit(cc);
 
@@ -119,18 +86,60 @@ String compile_and_run(Str src) {
 }
 
 void test_cpp_generation() {
-  Library lib = parse(R"(
+  {
+    Library lib = parse(R"(
 struct Person
   name u32
   age u32
-)");
-  println(to_bstruct(lib));
+)"_s);
 
-  //Parser p;
-  //Print ps;
-  //sprint(ps, ToCpp(p));
-  //String output = compile_and_run(ps.chars);
-  //println("output: "_s, output);
-  String output = compile_and_run("#include <stdio.h>\nint main() { printf(\"hi\"); }"_s);
-  check(output == "hi"_s);
+    Print p;
+    sprint(p, "using u32 = unsigned;\n"_s, to_cpp(lib), R"(
+#include <unistd.h>
+int main() {
+  Person p {23, 45};
+  write(1, &p, sizeof(p));
+}
+)"_s);
+    String output = compile_and_run(p.chars);
+    check(output == Span((char[]) {23, 0, 0, 0, 45, 0, 0, 0}));
+  }
+  {
+    Library lib = parse(R"(
+struct Person
+  name[4] u8
+)"_s);
+    Print p;
+    sprint(p, "using u8 = unsigned char;\n"_s, to_cpp(lib), R"(
+#include <unistd.h>
+int main() {
+  Person p {{5,6,7,8}};
+  write(1, &p, sizeof(p));
+}
+)"_s);
+    String output = compile_and_run(p.chars);
+    check(output == Span((char[]) {5, 6, 7, 8}));
+  }
+  {
+    Library lib = parse(R"(
+struct Person
+  len u32
+  name[len] u8
+)"_s);
+    Print p;
+    sprint(
+        p, "using u32 = unsigned;using u8 = unsigned char;\n"_s, to_cpp(lib),
+        R"(
+#include <unistd.h>
+#include <string.h>
+int main() {
+  u8 v[] {5, 6, 7, 8};
+  Person p {4, v};
+  write(1, &p, sizeof(p));
+}
+)"_s);
+    println("TODO fix this test:"_s);
+    String output = compile_and_run(p.chars);
+    check(output == Span((char[]) {4, 0, 0, 0, 5, 6, 7, 8}));
+  }
 }

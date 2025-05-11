@@ -867,16 +867,29 @@ struct Func {
 template <u32... I>
 struct Indices {};
 
-template <u32 F, u32... I>
-struct MakeIndices: MakeIndices<F - 1, F, I...> {};
+template <bool odd, class T>
+struct DoubleIndices;
 
 template <u32... I>
-struct MakeIndices<0, I...> {
-  using type = Indices<0, I...>;
+struct DoubleIndices<0, Indices<I...>> {
+  using t = Indices<I..., sizeof...(I) + I...>;
+};
+
+template <u32... I>
+struct DoubleIndices<1, Indices<I...>> {
+  using t = Indices<0, 1 + I..., 1 + sizeof...(I) + I...>;
 };
 
 template <u32 N>
-using make_indices = typename MakeIndices<N - 1>::type;
+struct MakeIndices: DoubleIndices<N % 2, typename MakeIndices<N / 2>::t> {};
+
+template <>
+struct MakeIndices<0> {
+  using t = Indices<>;
+};
+
+template <u32 N>
+using make_indices = typename MakeIndices<N>::t;
 
 struct Print {
   List<char> chars;

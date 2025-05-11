@@ -139,9 +139,14 @@ struct Library {
 Library parse(Str schema);
 
 void print_to_bstruct(Library const& p, Print& s);
+void to_cpp(Library const& p, Print& s);
 
-inline auto to_bstruct(Library const& x) {
+static inline auto to_bstruct(Library const& x) {
   return [&](Print& p) { print_to_bstruct(x, p); };
+}
+
+static inline auto to_cpp(Library const& x) {
+  return [&](Print& p) { to_cpp(x, p); };
 }
 
 inline Library::Type Library::Member::type() const {
