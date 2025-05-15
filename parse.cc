@@ -136,8 +136,6 @@ constexpr u8 PrimitiveSize[PrimitiveCount] {1, 2, 4, 8, 1, 2, 4, 8, 4, 8};
 constexpr char PrimitiveName[] = "u8u16u32u64i8i16i32i64f32f64";
 constexpr u8 PrimitiveNameEnd[PrimitiveCount] {2, 5, 8, 11, 13, 16, 19, 22, 25, 28};
 
-
-
 struct Parser {
   List<u32> indent {};
   enum { Struct, Log } cur_decl {};
@@ -633,6 +631,8 @@ void print_to_bstruct(Library const& p, Print& s) {
   }
   s.chars.pop();
 }
+
+u32 primitive_size(PrimitiveId p) { return PrimitiveSize[p]; }
 
 Str primitive_name(PrimitiveId i) {
   u32 begin = i ? u32(PrimitiveNameEnd[i - 1]) : 0u;

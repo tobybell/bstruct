@@ -131,14 +131,16 @@ struct Person
         p, "using u32 = unsigned;using u8 = unsigned char;\n"_s, to_cpp(lib),
         R"(
 #include <unistd.h>
-#include <string.h>
 int main() {
   u8 v[] {5, 6, 7, 8};
   Person p {4, v};
-  write(1, &p, sizeof(p));
+  u32 n = p.serialized_size();
+  auto buf = new char[n];
+  if (!(p.serialize(buf) == buf + n))
+    abort();
+  write(1, buf, n);
 }
 )"_s);
-    println("TODO fix this test:"_s);
     String output = compile_and_run(p.chars);
     check(output == Span((char[]) {4, 0, 0, 0, 5, 6, 7, 8}));
   }

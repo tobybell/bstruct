@@ -45,6 +45,7 @@ struct Library {
     Library const& l;
     u32 i;
     u32 struct_base;
+    u32 index() const { return i - struct_base; }
     LibraryMember const& library_member() const {
       return l.struct_member.items[i];
     }

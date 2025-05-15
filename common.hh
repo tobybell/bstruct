@@ -529,6 +529,11 @@ struct List {
     return data[size - 1];
   }
 
+  T& last() {
+    check(size);
+    return data[size - 1];
+  }
+
   void expand(u32 needed) {
     if (needed <= capacity)
       return;
