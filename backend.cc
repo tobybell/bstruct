@@ -1,7 +1,6 @@
 #include "backend.hh"
 
 #include "bytes.hh"
-#include "print.hh"
 
 #include <vector>
 #include <cstddef>
@@ -95,7 +94,7 @@ constexpr auto as_i32(u64 x) -> i32 {
 }
 
 void put_one(Stream& s, u64 ofs, u8 byte) {
-  s.bytes[ofs] = static_cast<char>(byte);
+  s[u32(ofs)] = static_cast<char>(byte);
 }
 
 // Create an 8-bit relative reference to placholder `ph` at offset `ofs` in
@@ -112,11 +111,11 @@ static void rel8(Backend& b, placeholder ph, offset ofs) {
 }
 
 u8* data_ptr(Stream& s, u64 ofs) {
-  return reinterpret_cast<u8*>(&s.bytes[ofs]);
+  return reinterpret_cast<u8*>(&s[u32(ofs)]);
 }
 
 u8 const* data_ptr(Stream const& s, u64 ofs) {
-  return (u8 const*) (&s.bytes[ofs]);
+  return (u8 const*) (&s[u32(ofs)]);
 }
 
 // Create a 32-bit relative reference to placholder `ph` at offset `ofs` in
@@ -164,7 +163,7 @@ void write(Stream& v, auto... x) {
   v.reserve((... + encode_upper_bound(x)));
   auto it = data_ptr(v, len(v));
   ((it = encode(x, it)),...);
-  v.grow(reinterpret_cast<char*>(it));
+  v.size = u32(reinterpret_cast<char*>(it) - v.begin());
 }
 
 void Backend::sub(reg64 r1, reg64 r2) {
@@ -413,8 +412,8 @@ void Backend::mov(reg64 r, int64_t n) { mov(r, static_cast<uint64_t>(n)); }
 
 void write_from(Stream& v, u8 const* data, u32 size) {
   v.reserve(size);
-  memcpy(&v.bytes[len(v)], data, size);
-  v.grow(size);
+  memcpy(v.end(), data, size);
+  v.size += size;
 }
 
 void write_from(Stream& v, Stream const& v2) {
@@ -546,7 +545,7 @@ void Backend::dump_output() {
   size_t i = 0;
   while (i < len(output)) {
     for (int c = 0; c < 16; ++c) {
-      uint8_t b = u8(output.bytes[i]);
+      uint8_t b = u8(output[u32(i)]);
       cerr << hex(b >> 4) << hex(b) << ' ';
       i += 1;
       if (i == len(output)) break;
