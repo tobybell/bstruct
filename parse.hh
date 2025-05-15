@@ -83,6 +83,7 @@ struct Library {
       u32 base = struct_base();
       return {l, base, base};
     }
+    friend u32 len(Members const& x) { return len(x.l.struct_member[x.s]); }
     u32 end() const { return l.struct_member.offsets[s]; }
   };
 

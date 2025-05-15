@@ -13,9 +13,12 @@ void to_cpp(Library const& p, Print& s) {
   u32 len_member_size;
 
   List<ContiguousChunk> chunks;
+  List<char> member_names;
 
   sprint(s, "#include <string.h>\n"_s);
   sprint(s, "extern \"C\" [[noreturn]] void abort();\n"_s);
+  sprint(s, "using u8 = unsigned char;\n"_s);
+  sprint(s, "using u32 = unsigned;\n"_s);
   for (auto struct_: p.structs()) {
     sprint(s, "struct "_s, struct_.name(), " {\n"_s);
     auto members = struct_.members();
@@ -23,6 +26,9 @@ void to_cpp(Library const& p, Print& s) {
       auto type = member.type();
       auto type_name = type.name();
       auto name = member.name();
+      if (member_names)
+        extend(member_names, "\\0"_s);
+      extend(member_names, name);
       if (member.no_array()) {
         sprint(s, "  "_s, type_name, ' ', name, ";\n"_s);
         u32 member_size = type.primitive().size();
@@ -76,7 +82,10 @@ void to_cpp(Library const& p, Print& s) {
       }
       sprint(s, "); dst += n;\n"_s);
     }
-    sprint(s, "    return dst;\n  };\n};\n\n"_s);
+    sprint(s, "    return dst;\n  };\n"_s);
+    sprint(s, "  static constexpr u32 member_count = "_s, len(members), ";\n"_s);
+    sprint(s, "  static constexpr char const* member_names = \""_s, member_names.span(), "\";\n"_s);
+    sprint(s, "};\n\n"_s);
   }
   s.chars.pop();
 }
