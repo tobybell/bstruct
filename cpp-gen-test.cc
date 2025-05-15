@@ -110,7 +110,7 @@ struct Person
   name[4] u8
 )"_s);
     Print p;
-    sprint(p, "using u8 = unsigned char;\n"_s, to_cpp(lib), R"(
+    sprint(p, to_cpp(lib), R"(
 #include <unistd.h>
 int main() {
   Person p {{5,6,7,8}};
@@ -128,7 +128,7 @@ struct Person
 )"_s);
     Print p;
     sprint(
-        p, "using u32 = unsigned;using u8 = unsigned char;\n"_s, to_cpp(lib),
+        p, to_cpp(lib),
         R"(
 #include <unistd.h>
 int main() {
@@ -143,5 +143,32 @@ int main() {
 )"_s);
     String output = compile_and_run(p.chars);
     check(output == Span((char[]) {4, 0, 0, 0, 5, 6, 7, 8}));
+  }
+  {
+    Library lib = parse(R"(
+struct A
+  one u32
+  two u32
+)"_s);
+    Print p;
+    sprint(
+        p, to_cpp(lib),
+        R"(
+#include <unistd.h>
+#include <string.h>
+int main() {
+  A x {3, 4};
+  auto n = x.member_names;
+  char c = ',';
+  for (u32 i = 0; i < x.member_count; ++i) {
+    write(1, n, strlen(n));
+    write(1, &c, 1);
+    n += strlen(n) + 1;
+  }
+}
+)"_s);
+    println("TODO: Add value printing to this test");
+    String output = compile_and_run(p.chars);
+    check(output == "one,two,"_s);
   }
 }
